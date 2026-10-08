@@ -10,6 +10,7 @@ import type {
   RunSummary,
 } from '@trafaret/core';
 import { toJobError } from './errors.ts';
+import type { CacheEntry, ResultCache } from './result-cache.ts';
 
 export type NodeInputs = { prompt?: NodeOutput; image?: NodeOutput };
 export type ExecutedNode = { output: NodeOutput; request?: RequestPreview; model?: JobModel };
@@ -27,6 +28,8 @@ export type NodeExecutor = (context: NodeExecutionContext) => Promise<ExecutedNo
 export type RunExecutionOptions = {
   index: GraphIndex;
   order: readonly string[];
+  cacheKeys: ReadonlyMap<string, string>;
+  cache: ResultCache;
   executeNode: NodeExecutor;
   now: () => number;
   onJobFailed: (nodeId: string, error: unknown) => void;
@@ -51,16 +54,34 @@ export class RunExecution {
   readonly run: Run;
   private readonly options: RunExecutionOptions;
   private readonly promises = new Map<string, Promise<NodeOutput>>();
+  private readonly hits = new Map<string, CacheEntry>();
 
   constructor(run: Run, options: RunExecutionOptions) {
     this.run = run;
     this.options = options;
   }
 
-  /** Queues every node and settles all of them; resolves once nothing is left to run. */
+  /** Marks cache hits as done, queues the rest and settles every node; resolves once nothing is left to run. */
   async start(): Promise<void> {
-    this.run.startedAt = this.options.now();
-    for (const nodeId of this.options.order) this.job(nodeId).status = 'queued';
+    const startedAt = this.options.now();
+    this.run.startedAt = startedAt;
+    for (const nodeId of this.options.order) {
+      const job = this.job(nodeId);
+      const key = this.options.cacheKeys.get(nodeId);
+      const hit = key !== undefined && isAiNodeType(job.nodeType) ? this.options.cache.get(key) : undefined;
+      if (!hit) {
+        job.status = 'queued';
+        continue;
+      }
+      this.hits.set(nodeId, hit);
+      job.status = 'success';
+      job.cached = true;
+      job.startedAt = startedAt;
+      job.finishedAt = startedAt;
+      job.output = hit.output;
+      job.request = hit.request;
+      job.model = hit.model;
+    }
     this.changed();
     await Promise.allSettled(this.options.order.map((nodeId) => this.settle(nodeId)));
   }
@@ -107,6 +128,8 @@ export class RunExecution {
   }
 
   private async execute(nodeId: string): Promise<NodeOutput> {
+    const hit = this.hits.get(nodeId);
+    if (hit) return hit.output; // known at planning time: no need to wait for inputs
     const job = this.job(nodeId);
     let inputs: NodeInputs;
     try {
@@ -130,6 +153,7 @@ export class RunExecution {
         markRunning: (details) => this.markRunning(job, details),
       });
       this.succeed(job, executed);
+      this.remember(nodeId, job, executed);
       return executed.output;
     } catch (error) {
       // Record the failure first: a logger that throws must not leave the job running.
@@ -170,6 +194,27 @@ export class RunExecution {
     this.changed();
   }
 
+  /** Stores successful AI results under the node's cache key; fallbacks and failures are never cached. */
+  private remember(nodeId: string, job: Job, executed: ExecutedNode): void {
+    const key = this.options.cacheKeys.get(nodeId);
+    const { output, request, model } = executed;
+    if (
+      key === undefined ||
+      output.kind !== 'image' ||
+      !request ||
+      !model ||
+      model.fallbackFrom !== undefined
+    ) {
+      return;
+    }
+    this.options.cache.set(key, {
+      output,
+      request,
+      model,
+      durationMs: (job.finishedAt ?? 0) - (job.startedAt ?? 0),
+    });
+  }
+
   private fail(job: Job, error: JobError): void {
     job.status = 'error';
     job.finishedAt = this.options.now();
@@ -199,7 +244,8 @@ export class RunExecution {
       this.run.startedAt === null ? 'queued' : active ? 'running' : failed ? 'failed' : 'completed';
     const terminal = this.run.status === 'completed' || this.run.status === 'failed';
     this.run.finishedAt = terminal ? (this.run.finishedAt ?? this.options.now()) : null;
-    this.run.summary = summarize(jobs);
+    const savedMs = [...this.hits.values()].reduce((sum, hit) => sum + hit.durationMs, 0);
+    this.run.summary = summarize(jobs, savedMs);
     this.run.version += 1;
   }
 }

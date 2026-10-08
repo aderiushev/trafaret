@@ -13,6 +13,7 @@ import type { ModelDefinition } from '../catalog/models.ts';
 import type { Semaphore } from '../lib/semaphore.ts';
 import type { PresetRepository } from '../library/preset-repository.ts';
 import type { ImageProvider } from '../providers/types.ts';
+import type { DailyBudget } from './daily-budget.ts';
 import { JobFailure } from './errors.ts';
 import { buildRequest } from './request-builder.ts';
 import type { ExecutedNode, NodeExecutionContext, NodeExecutor, NodeInputs } from './run-execution.ts';
@@ -23,6 +24,7 @@ export type NodeExecutorDeps = {
   assets: AssetStore;
   providers: Partial<Record<ProviderId, ImageProvider>>;
   semaphore: Semaphore;
+  budget: DailyBudget;
   jobTimeoutMs: number;
 };
 
@@ -140,13 +142,29 @@ async function runAiNode(
 
 type ProviderTarget = { provider: ImageProvider; providerModel: string; jobModel: JobModel };
 
+/** The model's own provider while today's budget lasts; afterwards the Mock model, labelled as a fallback. */
 function pickProvider(model: ModelDefinition, deps: NodeExecutorDeps): ProviderTarget {
-  const provider = deps.providers[model.provider];
-  if (!provider) throw notConfigured();
+  if (deps.budget.tryConsume(model.provider)) {
+    const provider = deps.providers[model.provider];
+    if (!provider) throw notConfigured();
+    return {
+      provider,
+      providerModel: model.providerModel,
+      jobModel: { id: model.id, provider: model.provider },
+    };
+  }
+  const mock = deps.providers.mock;
+  if (!mock) {
+    throw new JobFailure({
+      code: 'PROVIDER_ERROR',
+      message: "Today's demo budget is used up. Try again after 00:00 UTC.",
+      retryable: false,
+    });
+  }
   return {
-    provider,
-    providerModel: model.providerModel,
-    jobModel: { id: model.id, provider: model.provider },
+    provider: mock,
+    providerModel: 'mock',
+    jobModel: { id: 'mock', provider: 'mock', fallbackFrom: model.id },
   };
 }
 

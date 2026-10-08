@@ -2,7 +2,9 @@ import { pino, type Logger } from 'pino';
 import type { ProviderId } from '@trafaret/core';
 import { AssetStore } from '../assets/asset-store.ts';
 import { ModelCatalog } from '../catalog/catalog.ts';
+import { DailyBudget } from '../engine/daily-budget.ts';
 import { Engine } from '../engine/engine.ts';
+import { ResultCache } from '../engine/result-cache.ts';
 import { Semaphore } from '../lib/semaphore.ts';
 import { PresetRepository, type ResolvedPreset } from '../library/preset-repository.ts';
 import { createMockProvider } from '../providers/mock.ts';
@@ -79,6 +81,10 @@ export type HarnessOptions = {
   logger?: Pick<Logger, 'warn'>;
   /** The clock for the engine and the run repository. */
   now?: () => number;
+  /** Which provider credentials the catalog sees; the harness itself only ever builds the mock provider. */
+  credentials?: { cloudflare?: boolean; byteplus?: boolean };
+  /** Daily caps per provider (none means unlimited); a cap of 0 sends the provider's models to the Mock fallback. */
+  dailyLimits?: Partial<Record<ProviderId, number>>;
 };
 
 export async function createHarness(options: HarnessOptions = {}) {
@@ -86,8 +92,12 @@ export async function createHarness(options: HarnessOptions = {}) {
     ignoreAbort: options.ignoreAbort ?? false,
   });
   const assets = new AssetStore({ maxBytes: 64 * 1024 * 1024 });
-  const catalog = new ModelCatalog({ cloudflare: null, byteplus: null });
+  const catalog = new ModelCatalog({
+    cloudflare: options.credentials?.cloudflare ? { accountId: 'acc', apiToken: 'tok' } : null,
+    byteplus: options.credentials?.byteplus ? { apiKey: 'key' } : null,
+  });
   const presets = new PresetRepository(options.presets ?? []);
+  const cache = new ResultCache({ maxEntries: 100, isValid: (entry) => assets.has(entry.output.assetId) });
   const providers: Partial<Record<ProviderId, ImageProvider>> = {
     mock: options.realMock ? createMockProvider({ latencyMs: { min: 0, max: 0 } }) : provider,
   };
@@ -97,11 +107,13 @@ export async function createHarness(options: HarnessOptions = {}) {
     presets,
     assets,
     providers,
+    cache,
     runs: new RunRepository({ maxRuns: 50, retentionMs: 60 * 60 * 1000, ...clock }),
     semaphore: new Semaphore(options.maxConcurrentJobs ?? 4),
+    budget: new DailyBudget(options.dailyLimits ?? {}),
     jobTimeoutMs: options.jobTimeoutMs ?? 5_000,
     logger: options.logger ?? pino({ level: 'silent' }),
     ...clock,
   });
-  return { engine, provider, assets, catalog, presets };
+  return { engine, provider, assets, catalog, presets, cache };
 }

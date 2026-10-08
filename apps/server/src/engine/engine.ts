@@ -3,11 +3,14 @@ import { emptyRunSummary, indexGraph, topologicalOrder } from '@trafaret/core';
 import type { Graph, Job, NodeType, Run } from '@trafaret/core';
 import type { Logger } from 'pino';
 import type { RunRepository } from '../runs/run-repository.ts';
+import { computeCacheKeys } from './cache-key.ts';
 import { createNodeExecutor, type NodeExecutorDeps } from './node-executors.ts';
+import type { ResultCache } from './result-cache.ts';
 import { RunExecution, summarize } from './run-execution.ts';
 
 export type EngineDeps = NodeExecutorDeps & {
   runs: RunRepository;
+  cache: ResultCache;
   logger: Pick<Logger, 'warn'>;
   now?: () => number;
 };
@@ -56,6 +59,8 @@ export class Engine {
     const execution = new RunExecution(run, {
       index,
       order,
+      cacheKeys: computeCacheKeys(index, order, (presetId) => this.deps.presets.get(presetId)?.contentHash),
+      cache: this.deps.cache,
       now: this.now,
       executeNode: createNodeExecutor(index, this.deps),
       onJobFailed: (nodeId, error) =>

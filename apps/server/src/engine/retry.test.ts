@@ -1,5 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import { branchingGraph, generateNode, withNode } from '@trafaret/core/testing';
+import type { Graph } from '@trafaret/core';
+import {
+  branchingGraph,
+  edge,
+  editNode,
+  generateNode,
+  promptNode,
+  resultNode,
+  withNode,
+} from '@trafaret/core/testing';
 import { busy, createHarness } from '../test/engine-harness.ts';
 
 describe('retry', () => {
@@ -86,5 +95,145 @@ describe('retry', () => {
     await vi.waitFor(() => expect(provider.calls).toHaveLength(3));
     provider.calls[2]!.resolve();
     await vi.waitFor(() => expect(engine.getRun(runId)?.status).toBe('completed'));
+  });
+
+  it('does not re-run the successful ancestors of the failed node', async () => {
+    const graph: Graph = {
+      nodes: [
+        promptNode('prompt'),
+        generateNode('gen', { seed: 1 }),
+        editNode('edit', { seed: 2 }),
+        resultNode('result'),
+      ],
+      edges: [edge('prompt', 'gen', 'prompt'), edge('gen', 'edit', 'image'), edge('edit', 'result', 'image')],
+    };
+    const { engine, provider } = await createHarness();
+    const runId = engine.startRun(graph);
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(1));
+    provider.call(1).resolve(); // Generate succeeds…
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(2));
+    provider.call(2).reject(busy()); // …and Edit fails, which skips Result
+    await vi.waitFor(() => expect(engine.getRun(runId)?.status).toBe('failed'));
+
+    expect(engine.retryNode(runId, 'result')).toBe('ok'); // retrying the skipped Result retries Edit
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(3));
+    // Only Edit is called again, never Generate.
+    expect(provider.calls[2]?.request).toMatchObject({ mode: 'edit', seed: 2, attempt: 2 });
+
+    provider.calls[2]!.resolve();
+    await vi.waitFor(() => expect(engine.getRun(runId)?.status).toBe('completed'));
+    expect(provider.calls).toHaveLength(3); // Generate was never called a second time
+    const run = engine.getRun(runId)!;
+    expect(run.jobs['gen']).toMatchObject({ status: 'success', attempt: 1 });
+    expect(run.jobs['edit']).toMatchObject({ status: 'success', attempt: 2 });
+    expect(run.jobs['result']).toMatchObject({ status: 'success', attempt: 1 });
+  });
+
+  it('resets the sibling dependents skipped by the same failure together', async () => {
+    const graph: Graph = {
+      nodes: [
+        promptNode('prompt'),
+        generateNode('gen', { seed: 1 }),
+        resultNode('result-1'),
+        resultNode('result-2'),
+      ],
+      edges: [
+        edge('prompt', 'gen', 'prompt'),
+        edge('gen', 'result-1', 'image'),
+        edge('gen', 'result-2', 'image'),
+      ],
+    };
+    const { engine, provider } = await createHarness();
+    const runId = engine.startRun(graph);
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(1));
+    provider.call(1).reject(busy());
+    await vi.waitFor(() => expect(engine.getRun(runId)?.status).toBe('failed'));
+    for (const id of ['result-1', 'result-2']) {
+      expect(engine.getRun(runId)?.jobs[id]?.error?.code).toBe('UPSTREAM_FAILED');
+    }
+
+    expect(engine.retryNode(runId, 'result-1')).toBe('ok');
+    // Nothing has run again yet, so this is the reset itself: Result 2 was queued again along with Result 1.
+    const sibling = engine.getRun(runId)!.jobs['result-2']!;
+    expect(sibling).toMatchObject({ status: 'queued', attempt: 1 });
+    expect(sibling.error).toBeUndefined();
+
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(2));
+    provider.calls[1]!.resolve();
+    await vi.waitFor(() => expect(engine.getRun(runId)?.status).toBe('completed'));
+    expect(provider.calls).toHaveLength(2); // one extra call serves both Results
+    const run = engine.getRun(runId)!;
+    expect(run.jobs['gen']).toMatchObject({ status: 'success', attempt: 2 });
+    for (const id of ['result-1', 'result-2']) {
+      expect(run.jobs[id]).toMatchObject({ status: 'success', attempt: 1 });
+    }
+  });
+
+  it('leaves a reused node alone when the failed node above it is retried', async () => {
+    // Past its daily budget Generate runs on Mock, which is never cached; the Edit below it is.
+    const { engine, provider } = await createHarness({
+      credentials: { cloudflare: true },
+      dailyLimits: { cloudflare: 0 },
+    });
+    const graph: Graph = {
+      nodes: [
+        promptNode('prompt'),
+        generateNode('gen', { seed: 1, modelId: 'flux-2-klein' }),
+        editNode('edit', { seed: 2 }),
+        resultNode('result'),
+      ],
+      edges: [edge('prompt', 'gen', 'prompt'), edge('gen', 'edit', 'image'), edge('edit', 'result', 'image')],
+    };
+    const first = engine.startRun(graph);
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(1));
+    provider.call(1).resolve();
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(2));
+    provider.call(2).resolve();
+    await vi.waitFor(() => expect(engine.getRun(first)?.status).toBe('completed'));
+
+    // The second run generates again, while Edit is reused without waiting for it.
+    const second = engine.startRun(graph);
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(3));
+    expect(provider.calls[2]?.request).toMatchObject({ mode: 'generate', seed: 1, attempt: 1 });
+    provider.calls[2]!.reject(busy());
+    await vi.waitFor(() => expect(engine.getRun(second)?.status).toBe('failed'));
+    expect(engine.getRun(second)?.jobs['edit']).toMatchObject({ status: 'success', cached: true });
+
+    expect(engine.retryNode(second, 'gen')).toBe('ok');
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(4));
+    expect(provider.calls[3]?.request).toMatchObject({ mode: 'generate', seed: 1, attempt: 2 });
+    provider.calls[3]!.resolve();
+    await vi.waitFor(() => expect(engine.getRun(second)?.status).toBe('completed'));
+    expect(provider.calls).toHaveLength(4); // Edit was never called again
+    const run = engine.getRun(second)!;
+    expect(run.jobs['gen']).toMatchObject({ status: 'success', attempt: 2, cached: false });
+    expect(run.jobs['edit']).toMatchObject({ status: 'success', attempt: 1, cached: true });
+    expect(run.summary).toMatchObject({ reused: 1, failed: 0 });
+  });
+
+  it('keeps a reused sibling branch reused while the failed branch is retried', async () => {
+    const { engine, provider } = await createHarness();
+    const first = engine.startRun(branchingGraph());
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(2));
+    provider.call(1).reject(busy());
+    provider.call(2).resolve();
+    await vi.waitFor(() => expect(engine.getRun(first)?.status).toBe('failed'));
+
+    // Generate B is reused now; Generate A was never cached, so it is called again and fails again.
+    const second = engine.startRun(branchingGraph());
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(3));
+    provider.calls[2]!.reject(busy());
+    await vi.waitFor(() => expect(engine.getRun(second)?.status).toBe('failed'));
+    expect(engine.getRun(second)?.jobs['gen-b']).toMatchObject({ status: 'success', cached: true });
+
+    expect(engine.retryNode(second, 'gen-a')).toBe('ok');
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(4));
+    expect(provider.calls[3]?.request).toMatchObject({ seed: 1, attempt: 2 });
+    provider.calls[3]!.resolve();
+    await vi.waitFor(() => expect(engine.getRun(second)?.status).toBe('completed'));
+    expect(provider.calls).toHaveLength(4); // Generate B was not called again
+    const run = engine.getRun(second)!;
+    expect(run.jobs['gen-b']).toMatchObject({ status: 'success', cached: true, attempt: 1 });
+    expect(run.summary).toMatchObject({ generated: 1, reused: 1, failed: 0 });
   });
 });
