@@ -260,8 +260,9 @@ Prompt → Generate B (15 s). Level-by-level execution starts Edit A at 15 s; de
 `POST /api/runs/:runId/nodes/:nodeId/retry` returns `409` unless the job is in `error`. Otherwise:
 
 1. Reset set **R** = the node ∪ its ancestors in `error` ∪ (transitively) the descendants in `error`.
-2. For every node in R: delete its promise, set its job to `queued`, clear `output`/`error`, and increment `attempt`
-   for nodes that actually ran (not `UPSTREAM_FAILED`).
+2. For every node in R: delete its promise, set its job to `queued`, clear `output`, `error`, `request`, `model` and
+   the timestamps (`startedAt`, `finishedAt`), and increment `attempt` for nodes that actually ran (not
+   `UPSTREAM_FAILED`).
 3. `settle()` every node in R. Successful nodes keep their outputs; in-flight siblings are still awaited through the
    shared promise map, so a retry works while other branches are still running.
 
@@ -285,7 +286,8 @@ key(node) = sha256(canonicalJson({
 - Lookups and stores happen only for AI nodes; trivial nodes are recomputed for free.
 - `ResultCache` is an in-memory LRU (500 entries) of `{ output, durationMs, request, model }`. An entry whose asset
   has been evicted counts as a miss.
-- Never cached: errors, and budget fallbacks (`model.fallbackFrom` set).
+- Never cached: errors, budget fallbacks (`model.fallbackFrom` set), and results computed — directly or
+  transitively — from a budget-fallback result, since their keys assume the real upstream outputs.
 - Seeds give clear semantics: **Run** builds only what changed; **🎲 Regenerate** sets a new seed and starts a run,
   so that node and its descendants re-render. Models without seed support still get a fresh call, because the seed
   is part of the key.
@@ -312,7 +314,7 @@ JSON bodies are validated with zod schemas from `core`; the same schemas generat
 | GET    | `/api/assets/:assetId`                  | image bytes, `Cache-Control: public, max-age=31536000, immutable`                           |
 | POST   | `/api/runs`                             | `{ graph }` → `202 { runId }` · `400 { error: { code: 'INVALID_GRAPH', message, issues } }` |
 | GET    | `/api/runs/:runId`                      | `200 Run` · `404`                                                                           |
-| POST   | `/api/runs/:runId/nodes/:nodeId/retry`  | `202 { runId }` · `404` · `409`                                                             |
+| POST   | `/api/runs/:runId/nodes/:nodeId/retry`  | `202 { runId }` · `404` unknown run · `409` node not in `error` (an unknown node id too)    |
 
 Every error uses one envelope: `{ error: { code, message, issues? } }`.
 
@@ -342,16 +344,16 @@ The preview is stored on the job and shown in the inspector as "Request sent to 
 
 ```ts
 interface ImageProvider {
-  generate(request: ProviderRequest, signal: AbortSignal): Promise<{ bytes: Buffer; mime: string }>;
+  generate(request: ProviderRequest, signal: AbortSignal): Promise<{ bytes: Buffer }>;
 }
 ```
 
-Adapters receive `fetch` by injection, so tests stub it. Every output is normalised to WebP (quality 90) before it
-is stored.
+Adapters receive `fetch` by injection, so tests stub it. A provider returns bytes only: the server sniffs the real
+format from them and normalises every output to WebP (quality 90) before it is stored.
 
 | Model                      | Adapter      | Request                                                                                                                                                                                                                   | Edit | Refs | Negative | Seed | Cost                 |
 |----------------------------|--------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------|------|----------|------|----------------------|
-| FLUX.2 klein 4B            | `cloudflare` | `POST https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/run/@cf/black-forest-labs/flux-2-klein-4b`, Bearer token, multipart: `prompt`, `width`, `height`, `seed`, `input_image_0..3` (each ≤ 512 px) → base64 image | ✓    | 4    | folded   | ✓    | free tier, ~95/day   |
+| FLUX.2 klein 4B            | `cloudflare` | `POST https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/run/@cf/black-forest-labs/flux-2-klein-4b`, Bearer token, multipart: `prompt`, `width`, `height`, `seed`, `input_image_0..3` (each < 512 px) → base64 image | ✓    | 4    | folded   | ✓    | free tier, ~95/day   |
 | Seedream 4.5               | `byteplus`   | `POST https://ark.ap-southeast.bytepluses.com/api/v3/images/generations`, Bearer `ARK_API_KEY`, JSON: `model: seedream-4-5-251128`, `prompt`, `image: dataURI[]`, `size`, `response_format: b64_json`, `watermark: false`, `sequential_image_generation: disabled` | ✓    | 14   | folded   | ✗    | 200 free, then $0.04 |
 | Mock                       | `mock`       | sharp renders an SVG: a gradient derived from hash(prompt, seed), the prompt text and a "MOCK" label; Edit composites the source image; latency 1.2–3.5 s, derived from the seed                                         | ✓    | 14   | native   | ✓    | $0                   |
 | Mock · fails first attempt | `mock`       | Same as Mock, but attempt 1 always fails with a retryable error — a deterministic retry demo and e2e fixture                                                                                                              | ✓    | 14   | native   | ✓    | $0                   |
@@ -383,7 +385,8 @@ Raw provider errors are logged on the server only.
 - `AssetStore`: content-addressed, in-memory LRU capped at 150 MB (the demo host has 512 MB RAM). Pinned assets —
   preset references and the sample photo — are never evicted.
 - Uploads: `@fastify/multipart`, ≤ 10 MB, format checked from the bytes with sharp (PNG/JPEG/WebP only),
-  ≤ 4096×4096, stored as uploaded.
+  ≤ 4096×4096, stored as uploaded — except that a rotated (EXIF) photo is stored upright (re-encoded). The asset id
+  is the SHA-256 of the stored bytes.
 - A sample product photo, kept in `apps/server/library/samples/`, is pinned at boot for the Edit templates.
 
 ### 7.6 Live-demo guards
@@ -397,17 +400,20 @@ Raw provider errors are logged on the server only.
 ### 7.7 Configuration
 
 Validated with zod at boot. A missing optional key disables its model with a reason; it never crashes the server.
+A malformed one (spaces or control characters) stops the boot with the variable's name, never its value.
 
-| Variable                                         | Default     | Purpose                                     |
-|--------------------------------------------------|-------------|---------------------------------------------|
-| `PORT`                                           | 8080        | HTTP port (Render injects its own)          |
-| `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`  | —           | enable FLUX.2 klein                         |
-| `ARK_API_KEY`                                    | —           | enable Seedream 4.5                         |
-| `MAX_CONCURRENT_JOBS`                            | 4           | global provider slots                       |
-| `JOB_TIMEOUT_MS`                                 | 120000      | per-call timeout                            |
-| `DAILY_LIMIT_CLOUDFLARE` / `DAILY_LIMIT_BYTEPLUS` | 80 / 20     | demo budget                                 |
-| `MOCK_LATENCY_MS`                                | `1200-3500` | mock latency range (tests use `0-20`)       |
-| `LOG_LEVEL`                                      | `info`      | pino log level                              |
+| Variable                                          | Default       | Purpose                                                                                                          |
+|---------------------------------------------------|---------------|------------------------------------------------------------------------------------------------------------------|
+| `NODE_ENV`                                        | `development` | `production` turns on `trustProxy` and the production rate limits, keyed by the edge's `cf-connecting-ip` (§7.6) |
+| `HOST`                                            | `127.0.0.1`   | listen address; `0.0.0.0` when `NODE_ENV=production`; an explicit value always wins                              |
+| `PORT`                                            | 8080          | HTTP port (Render injects its own)                                                                               |
+| `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`   | —             | enable FLUX.2 klein                                                                                              |
+| `ARK_API_KEY`                                     | —             | enable Seedream 4.5                                                                                              |
+| `MAX_CONCURRENT_JOBS`                             | 4             | global provider slots                                                                                            |
+| `JOB_TIMEOUT_MS`                                  | 120000        | per-call timeout                                                                                                 |
+| `DAILY_LIMIT_CLOUDFLARE` / `DAILY_LIMIT_BYTEPLUS` | 80 / 20       | demo budget                                                                                                      |
+| `MOCK_LATENCY_MS`                                 | `1200-3500`   | mock latency range (tests use `0-20`)                                                                            |
+| `LOG_LEVEL`                                       | `info`        | pino log level                                                                                                   |
 
 ### 7.8 Security
 
