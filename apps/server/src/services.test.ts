@@ -1,0 +1,33 @@
+import { pino } from 'pino';
+import { describe, expect, it, vi } from 'vitest';
+import type { Run } from '@trafaret/core';
+import { branchingGraph } from '@trafaret/core/testing';
+import { loadConfig } from './config.ts';
+import { createServices } from './services.ts';
+
+describe('createServices', () => {
+  it('keeps the images behind reused results fresh in the asset store', async () => {
+    const config = loadConfig({ NODE_ENV: 'test', MOCK_LATENCY_MS: '0-0' });
+    const { assets, engine } = await createServices(config, pino({ level: 'silent' }));
+
+    const completed = async (runId: string): Promise<Run> => {
+      await vi.waitFor(() => expect(engine.getRun(runId)?.status).toBe('completed'), { timeout: 5_000 });
+      return engine.getRun(runId)!;
+    };
+    const generatedAssetIds = (run: Run): string[] =>
+      ['gen-a', 'gen-b'].map((nodeId) => {
+        const output = run.jobs[nodeId]?.output;
+        if (output?.kind !== 'image') throw new Error(`${nodeId} produced no image`);
+        return output.assetId;
+      });
+
+    const generated = generatedAssetIds(await completed(engine.startRun(branchingGraph())));
+
+    // AssetStore.get() refreshes an image's LRU recency; has() would leave it to age out while its result is reused.
+    const get = vi.spyOn(assets, 'get');
+    const second = await completed(engine.startRun(branchingGraph()));
+
+    expect(second.summary).toMatchObject({ generated: 0, reused: 2 });
+    for (const assetId of generated) expect(get).toHaveBeenCalledWith(assetId);
+  });
+});

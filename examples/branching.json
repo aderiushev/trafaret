@@ -1,0 +1,25 @@
+{
+  "graph": {
+    "nodes": [
+      { "id": "prompt", "type": "prompt", "data": { "text": "A white sneaker on a stone pedestal" } },
+      {
+        "id": "gen-a",
+        "type": "generateImage",
+        "data": { "modelId": "mock", "presetId": "premium-3d", "aspectRatio": "1:1", "seed": 101 }
+      },
+      {
+        "id": "gen-b",
+        "type": "generateImage",
+        "data": { "modelId": "mock", "presetId": "lifestyle", "aspectRatio": "1:1", "seed": 202 }
+      },
+      { "id": "result-a", "type": "result", "data": {} },
+      { "id": "result-b", "type": "result", "data": {} }
+    ],
+    "edges": [
+      { "id": "e1", "source": "prompt", "sourceHandle": "out", "target": "gen-a", "targetHandle": "prompt" },
+      { "id": "e2", "source": "prompt", "sourceHandle": "out", "target": "gen-b", "targetHandle": "prompt" },
+      { "id": "e3", "source": "gen-a", "sourceHandle": "out", "target": "result-a", "targetHandle": "image" },
+      { "id": "e4", "source": "gen-b", "sourceHandle": "out", "target": "result-b", "targetHandle": "image" }
+    ]
+  }
+}

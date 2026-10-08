@@ -1,10 +1,11 @@
 import { buildApp } from './app.ts';
 import { loadConfig } from './config.ts';
 import { createLogger } from './lib/logger.ts';
+import { createServices } from './services.ts';
 
 const config = loadConfig(process.env);
 const logger = createLogger({ level: config.logLevel });
-const app = await buildApp(config, logger);
+const app = await buildApp(config, await createServices(config, logger), logger);
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
