@@ -39,4 +39,12 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ PORT: 'abc' })).toThrow(/PORT/);
     expect(() => loadConfig({ MOCK_LATENCY_MS: 'fast' })).toThrow(/MOCK_LATENCY_MS/);
   });
+
+  it('rejects a provider secret with a space or control character, without echoing it', () => {
+    const load = () => loadConfig({ ARK_API_KEY: 'abc\ndef' });
+    expect(load).toThrow(/ARK_API_KEY/);
+    expect(load).toThrow(expect.objectContaining({ message: expect.not.stringContaining('abc') }));
+    expect(() => loadConfig({ CLOUDFLARE_ACCOUNT_ID: 'acc\r' })).toThrow(/CLOUDFLARE_ACCOUNT_ID/);
+    expect(() => loadConfig({ CLOUDFLARE_API_TOKEN: 'tok en' })).toThrow(/CLOUDFLARE_API_TOKEN/);
+  });
 });

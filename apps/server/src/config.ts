@@ -3,9 +3,16 @@ import { z } from 'zod';
 const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'] as const;
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
+/**
+ * Printable ASCII without spaces. A stray CR, LF or NUL (say, from a pasted key) would make every provider call fail
+ * with an error that quotes the Authorization header, key included; the message never repeats the value.
+ */
 const optionalSecret = z.preprocess(
   (value) => (value === '' ? undefined : value),
-  z.string().min(1).optional(),
+  z
+    .string()
+    .regex(/^[\x21-\x7E]+$/, 'must be printable ASCII without spaces or line breaks')
+    .optional(),
 );
 
 const latencyRange = z
