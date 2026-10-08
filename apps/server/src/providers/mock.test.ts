@@ -35,6 +35,11 @@ describe('mock provider', () => {
     expect(a.bytes.equals(c.bytes)).toBe(false);
   });
 
+  it('renders prompts with characters that XML forbids', async () => {
+    const { bytes } = await instant.generate(request({ prompt: 'A white\u0001 sneaker ￿' }), signal);
+    expect(await sharp(bytes).metadata()).toMatchObject({ format: 'png', width: 64, height: 48 });
+  });
+
   it('builds on the source image in edit mode', async () => {
     const source = { bytes: await makePng(20, 20, '#00ff00'), mime: 'image/png' };
     const { bytes } = await instant.generate(request({ mode: 'edit', images: [source] }), signal);

@@ -59,7 +59,12 @@ function latencyFor(request: ProviderRequest, range: { min: number; max: number 
     : range.min + (hashString(`${request.prompt}|${request.seed ?? 0}`) % (spread + 1));
 }
 
-const escapeXml = (text: string): string => text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
+/** Characters XML 1.0 forbids even as references: one of them would make librsvg reject the whole image. */
+// eslint-disable-next-line no-control-regex -- matching control characters is the point
+const XML_ILLEGAL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]/g;
+
+const escapeXml = (text: string): string =>
+  text.replace(XML_ILLEGAL, '').replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 
 function wrap(text: string, width: number, maxLines: number): string[] {
   const lines: string[] = [];
