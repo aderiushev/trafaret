@@ -3,12 +3,15 @@ import { z } from 'zod';
 const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'] as const;
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
+/** `KEY=` in an env file means "not set". */
+const emptyAsUnset = (value: unknown): unknown => (value === '' ? undefined : value);
+
 /**
  * Printable ASCII without spaces. A stray CR, LF or NUL (say, from a pasted key) would make every provider call fail
  * with an error that quotes the Authorization header, key included; the message never repeats the value.
  */
 const optionalSecret = z.preprocess(
-  (value) => (value === '' ? undefined : value),
+  emptyAsUnset,
   z
     .string()
     .regex(/^[\x21-\x7E]+$/, 'must be printable ASCII without spaces or line breaks')
@@ -25,7 +28,7 @@ const latencyRange = z
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  HOST: z.string().default('0.0.0.0'),
+  HOST: z.preprocess(emptyAsUnset, z.string().optional()),
   PORT: z.coerce.number().int().positive().default(8080),
   LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
   CLOUDFLARE_ACCOUNT_ID: optionalSecret,
@@ -63,7 +66,8 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
   const e = parsed.data;
   return {
     env: e.NODE_ENV,
-    host: e.HOST,
+    // Loopback keeps a development server off the network; a production container must listen on every interface.
+    host: e.HOST ?? (e.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1'),
     port: e.PORT,
     logLevel: e.LOG_LEVEL,
     cloudflare:

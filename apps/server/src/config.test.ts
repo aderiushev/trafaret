@@ -5,7 +5,7 @@ describe('loadConfig', () => {
   it('applies the documented defaults', () => {
     expect(loadConfig({})).toMatchObject({
       env: 'development',
-      host: '0.0.0.0',
+      host: '127.0.0.1',
       port: 8080,
       maxConcurrentJobs: 4,
       jobTimeoutMs: 120_000,
@@ -14,6 +14,17 @@ describe('loadConfig', () => {
       cloudflare: null,
       byteplus: null,
     });
+  });
+
+  it('listens on every interface by default only in production', () => {
+    expect(loadConfig({ NODE_ENV: 'production' }).host).toBe('0.0.0.0');
+    expect(loadConfig({ NODE_ENV: 'test' }).host).toBe('127.0.0.1');
+    expect(loadConfig({ HOST: '' }).host).toBe('127.0.0.1');
+  });
+
+  it('lets an explicit HOST win', () => {
+    expect(loadConfig({ NODE_ENV: 'production', HOST: '127.0.0.1' }).host).toBe('127.0.0.1');
+    expect(loadConfig({ HOST: '0.0.0.0' }).host).toBe('0.0.0.0');
   });
 
   it('treats empty keys as missing', () => {
