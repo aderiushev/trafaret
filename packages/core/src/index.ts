@@ -4,3 +4,7 @@ export * from './graph.ts';
 export * from './graph-index.ts';
 export * from './connect.ts';
 export * from './validate.ts';
+export * from './run.ts';
+export * from './catalog.ts';
+export * from './preset.ts';
+export * from './api.ts';
