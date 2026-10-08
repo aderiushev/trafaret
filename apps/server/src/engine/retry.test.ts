@@ -10,8 +10,10 @@ import {
   withNode,
 } from '@trafaret/core/testing';
 import { busy, createHarness } from '../test/engine-harness.ts';
+import { RENDER_TEST_TIMEOUT_MS, waitForRun } from '../test/wait.ts';
 
-describe('retry', () => {
+// Some tests render real Mock images; the suite timeout leaves room for their waits on a loaded machine.
+describe('retry', { timeout: RENDER_TEST_TIMEOUT_MS }, () => {
   it('re-runs only the failed node and the dependents it blocked', async () => {
     const { engine, provider } = await createHarness();
     const runId = engine.startRun(branchingGraph());
@@ -51,7 +53,7 @@ describe('retry', () => {
   it('refuses nodes that did not fail and unknown runs', async () => {
     const { engine } = await createHarness({ realMock: true });
     const runId = engine.startRun(branchingGraph());
-    await vi.waitFor(() => expect(engine.getRun(runId)?.status).toBe('completed'));
+    await waitForRun(engine, runId, 'completed');
     expect(engine.retryNode(runId, 'gen-a')).toBe('node-not-failed');
     expect(engine.retryNode('run_missing', 'gen-a')).toBe('run-not-found');
   });
@@ -60,14 +62,14 @@ describe('retry', () => {
     const { engine } = await createHarness({ realMock: true });
     const graph = withNode(branchingGraph(), generateNode('gen-a', { seed: 1, modelId: 'mock-fails-first' }));
     const runId = engine.startRun(graph);
-    await vi.waitFor(() => expect(engine.getRun(runId)?.status).toBe('failed'));
+    await waitForRun(engine, runId, 'failed');
     expect(engine.getRun(runId)?.jobs['gen-a']?.error).toMatchObject({
       code: 'PROVIDER_ERROR',
       retryable: true,
     });
 
     engine.retryNode(runId, 'gen-a');
-    await vi.waitFor(() => expect(engine.getRun(runId)?.status).toBe('completed'));
+    await waitForRun(engine, runId, 'completed');
     expect(engine.getRun(runId)?.jobs['gen-a']?.attempt).toBe(2);
   });
 

@@ -11,6 +11,7 @@ import {
 } from '@trafaret/core/testing';
 import type { ResolvedPreset } from '../library/preset-repository.ts';
 import { busy, createHarness } from '../test/engine-harness.ts';
+import { RENDER_TEST_TIMEOUT_MS, waitForRun } from '../test/wait.ts';
 
 const fakePreset = (id: string, contentHash: string): ResolvedPreset => ({
   preset: { id, name: id, mainPrompt: `${id} style`, negativePrompt: '', references: [] },
@@ -18,7 +19,8 @@ const fakePreset = (id: string, contentHash: string): ResolvedPreset => ({
   contentHash,
 });
 
-describe('incremental runs', () => {
+// Some tests render real Mock images; the suite timeout leaves room for their waits on a loaded machine.
+describe('incremental runs', { timeout: RENDER_TEST_TIMEOUT_MS }, () => {
   it('reuses unchanged AI nodes on the next run', async () => {
     const { engine, provider } = await createHarness();
     const first = engine.startRun(branchingGraph());
@@ -62,9 +64,9 @@ describe('incremental runs', () => {
     });
     const { engine } = await createHarness({ realMock: true });
     const first = engine.startRun(chain(1));
-    await vi.waitFor(() => expect(engine.getRun(first)?.status).toBe('completed'));
+    await waitForRun(engine, first, 'completed');
     const second = engine.startRun(chain(2));
-    await vi.waitFor(() => expect(engine.getRun(second)?.status).toBe('completed'));
+    await waitForRun(engine, second, 'completed');
     expect(engine.getRun(second)?.jobs['gen']?.cached).toBe(false);
     expect(engine.getRun(second)?.jobs['edit']?.cached).toBe(false);
   });
@@ -137,7 +139,7 @@ describe('incremental runs', () => {
     });
     const graph = withNode(branchingGraph(), generateNode('gen-a', { seed: 1, modelId: 'flux-2-klein' }));
     const first = engine.startRun(graph);
-    await vi.waitFor(() => expect(engine.getRun(first)?.status).toBe('completed'));
+    await waitForRun(engine, first, 'completed');
     expect(engine.getRun(first)?.jobs['gen-a']).toMatchObject({
       status: 'success',
       model: { id: 'mock', provider: 'mock', fallbackFrom: 'flux-2-klein' },
@@ -146,7 +148,7 @@ describe('incremental runs', () => {
     expect(engine.getRun(first)?.summary).toMatchObject({ generated: 1, fallbacks: 1 });
 
     const second = engine.startRun(graph);
-    await vi.waitFor(() => expect(engine.getRun(second)?.status).toBe('completed'));
+    await waitForRun(engine, second, 'completed');
     expect(engine.getRun(second)?.jobs['gen-a']?.cached).toBe(false);
     expect(engine.getRun(second)?.jobs['gen-b']?.cached).toBe(true);
   });
@@ -201,12 +203,12 @@ describe('incremental runs', () => {
       maxConcurrentJobs: 1, // one job at a time: Generate B is stored after Generate A has fallen back
     });
     const first = engine.startRun(graph);
-    await vi.waitFor(() => expect(engine.getRun(first)?.status).toBe('completed'));
+    await waitForRun(engine, first, 'completed');
     // Only Generate A is a fallback: the Edits ran on their own (Mock) model.
     expect(engine.getRun(first)?.summary).toMatchObject({ generated: 3, fallbacks: 1 });
 
     const second = engine.startRun(graph);
-    await vi.waitFor(() => expect(engine.getRun(second)?.status).toBe('completed'));
+    await waitForRun(engine, second, 'completed');
     const run = engine.getRun(second)!;
     for (const id of ['gen-a', 'edit-1', 'edit-2']) expect(run.jobs[id]?.cached, id).toBe(false);
     expect(run.jobs['gen-b']?.cached).toBe(true);
@@ -223,7 +225,7 @@ describe('incremental runs', () => {
         edges: [edge('prompt', 'gen', 'prompt')],
       };
       const runId = engine.startRun(graph);
-      await vi.waitFor(() => expect(engine.getRun(runId)?.status).toBe('completed'));
+      await waitForRun(engine, runId, 'completed');
       return engine.getRun(runId)?.jobs['gen']?.model;
     };
 

@@ -4,16 +4,15 @@ import type { Run } from '@trafaret/core';
 import { branchingGraph } from '@trafaret/core/testing';
 import { loadConfig } from './config.ts';
 import { createServices } from './services.ts';
+import { RENDER_TEST_TIMEOUT_MS, waitForRun } from './test/wait.ts';
 
-describe('createServices', () => {
+// The runs render real Mock images at full size; the suite timeout leaves room for that on a loaded machine.
+describe('createServices', { timeout: RENDER_TEST_TIMEOUT_MS }, () => {
   it('keeps the images behind reused results fresh in the asset store', async () => {
     const config = loadConfig({ NODE_ENV: 'test', MOCK_LATENCY_MS: '0-0' });
     const { assets, engine } = await createServices(config, pino({ level: 'silent' }));
 
-    const completed = async (runId: string): Promise<Run> => {
-      await vi.waitFor(() => expect(engine.getRun(runId)?.status).toBe('completed'), { timeout: 5_000 });
-      return engine.getRun(runId)!;
-    };
+    const completed = (runId: string): Promise<Run> => waitForRun(engine, runId, 'completed');
     const generatedAssetIds = (run: Run): string[] =>
       ['gen-a', 'gen-b'].map((nodeId) => {
         const output = run.jobs[nodeId]?.output;

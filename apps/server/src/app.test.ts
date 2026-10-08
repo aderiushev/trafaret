@@ -5,8 +5,10 @@ import type { CatalogResponse, Run } from '@trafaret/core';
 import { buildApp } from './app.ts';
 import { loadConfig } from './config.ts';
 import { createServices } from './services.ts';
+import { RENDER_TEST_TIMEOUT_MS, RENDER_WAIT_MS } from './test/wait.ts';
 
-describe('app', () => {
+// The run renders real Mock images at full size; the suite timeout leaves room for that on a loaded machine.
+describe('app', { timeout: RENDER_TEST_TIMEOUT_MS }, () => {
   it('serves the whole API and runs the example workflow end to end', async () => {
     const config = loadConfig({ NODE_ENV: 'test', MOCK_LATENCY_MS: '0-5' });
     const logger = pino({ level: 'silent' });
@@ -34,7 +36,7 @@ describe('app', () => {
         run = (await app.inject({ method: 'GET', url: `/api/runs/${runId}` })).json<Run>();
         expect(run.status).toBe('completed');
       },
-      { timeout: 5_000 },
+      { timeout: RENDER_WAIT_MS },
     );
     const output = run?.jobs['result-a']?.output;
     expect(output?.kind).toBe('image');

@@ -5,6 +5,7 @@ import type { Run } from '@trafaret/core';
 import { branchingGraph, edge, generateNode, promptNode, withNode } from '@trafaret/core/testing';
 import { createHttpServer } from '../http/server.ts';
 import { createHarness } from '../test/engine-harness.ts';
+import { RENDER_TEST_TIMEOUT_MS, RENDER_WAIT_MS } from '../test/wait.ts';
 import { registerRunRoutes } from './routes.ts';
 
 async function setup(runsPer10Minutes = 100) {
@@ -19,14 +20,18 @@ const createRun = (app: FastifyInstance, graph: unknown) =>
 
 async function waitForStatus(app: FastifyInstance, runId: string, status: Run['status']): Promise<Run> {
   let run: Run | undefined;
-  await vi.waitFor(async () => {
-    run = (await app.inject({ method: 'GET', url: `/api/runs/${runId}` })).json<Run>();
-    expect(run.status).toBe(status);
-  });
+  await vi.waitFor(
+    async () => {
+      run = (await app.inject({ method: 'GET', url: `/api/runs/${runId}` })).json<Run>();
+      expect(run.status).toBe(status);
+    },
+    { timeout: RENDER_WAIT_MS },
+  );
   return run!;
 }
 
-describe('runs API', () => {
+// Runs render real Mock images; the suite timeout leaves room for their waits on a loaded machine.
+describe('runs API', { timeout: RENDER_TEST_TIMEOUT_MS }, () => {
   it('starts a run and exposes its progress until it completes', async () => {
     const app = await setup();
     const created = await createRun(app, branchingGraph());

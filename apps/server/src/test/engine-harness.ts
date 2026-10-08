@@ -1,7 +1,8 @@
 import { pino, type Logger } from 'pino';
-import type { ProviderId } from '@trafaret/core';
+import type { AspectRatio, ProviderId } from '@trafaret/core';
 import { AssetStore } from '../assets/asset-store.ts';
 import { ModelCatalog } from '../catalog/catalog.ts';
+import { MODEL_DEFINITIONS, type ModelDefinition, type Size } from '../catalog/models.ts';
 import { DailyBudget } from '../engine/daily-budget.ts';
 import { Engine } from '../engine/engine.ts';
 import { ResultCache } from '../engine/result-cache.ts';
@@ -16,6 +17,20 @@ import {
 } from '../providers/types.ts';
 import { RunRepository } from '../runs/run-repository.ts';
 import { makePng } from './images.ts';
+
+/** Every aspect ratio at a tiny size: a real Mock render takes milliseconds instead of a 1024 px render's CPU time. */
+const TINY_SIZES: Record<AspectRatio, Size> = {
+  '1:1': { width: 32, height: 32 },
+  '4:3': { width: 32, height: 24 },
+  '3:4': { width: 24, height: 32 },
+  '16:9': { width: 32, height: 18 },
+  '9:16': { width: 18, height: 32 },
+};
+/** The real model definitions, rendering at tiny sizes. */
+const TINY_MODEL_DEFINITIONS: readonly ModelDefinition[] = MODEL_DEFINITIONS.map((definition) => ({
+  ...definition,
+  sizes: TINY_SIZES,
+}));
 
 /** A retryable provider failure for tests. */
 export const busy = (): ProviderError =>
@@ -73,7 +88,10 @@ export type HarnessOptions = {
   maxConcurrentJobs?: number;
   jobTimeoutMs?: number;
   presets?: ResolvedPreset[];
-  /** Use the real (instant) mock provider instead of the controlled one. */
+  /**
+   * Use the real mock provider (no latency) instead of the controlled one, with every model at tiny output sizes.
+   * The controlled provider keeps the real sizes, which tests assert.
+   */
   realMock?: boolean;
   /** The controlled provider never reacts to the abort signal, like a provider that ignores timeouts. */
   ignoreAbort?: boolean;
@@ -94,10 +112,13 @@ export async function createHarness(options: HarnessOptions = {}) {
     ignoreAbort: options.ignoreAbort ?? false,
   });
   const assets = new AssetStore({ maxBytes: 64 * 1024 * 1024 });
-  const catalog = new ModelCatalog({
-    cloudflare: options.credentials?.cloudflare ? { accountId: 'acc', apiToken: 'tok' } : null,
-    byteplus: options.credentials?.byteplus ? { apiKey: 'key' } : null,
-  });
+  const catalog = new ModelCatalog(
+    {
+      cloudflare: options.credentials?.cloudflare ? { accountId: 'acc', apiToken: 'tok' } : null,
+      byteplus: options.credentials?.byteplus ? { apiKey: 'key' } : null,
+    },
+    options.realMock ? TINY_MODEL_DEFINITIONS : MODEL_DEFINITIONS,
+  );
   const presets = new PresetRepository(options.presets ?? []);
   const cache = new ResultCache({
     maxEntries: options.cacheEntries ?? 100,
