@@ -24,18 +24,22 @@ export function indexGraph(graph: Graph): GraphIndex {
   return { nodes, incoming, outgoing };
 }
 
-/** Kahn's algorithm. Ties keep the order of `graph.nodes`. Returns null when the graph has a cycle. */
+/**
+ * Kahn's algorithm that always takes the ready node appearing first in `graph.nodes`, so ties keep the node order
+ * whatever the order of the edges. O(n²), which is nothing at ≤ 30 nodes. Returns null when the graph has a cycle.
+ */
 export function topologicalOrder(index: GraphIndex): string[] | null {
+  // Unplaced nodes and how many of their inputs are still unplaced: a node is ready at 0.
   const remaining = new Map<string, number>();
   for (const [id, edges] of index.incoming) remaining.set(id, edges.length);
-  const ready = [...index.nodes.keys()].filter((id) => remaining.get(id) === 0);
+  const nodeIds = [...index.nodes.keys()];
+  const nextReady = (): string | undefined => nodeIds.find((id) => remaining.get(id) === 0);
   const order: string[] = [];
-  for (const id of ready) {
+  for (let id = nextReady(); id !== undefined; id = nextReady()) {
+    remaining.delete(id);
     order.push(id);
     for (const edge of index.outgoing.get(id) ?? []) {
-      const left = (remaining.get(edge.target) ?? 0) - 1;
-      remaining.set(edge.target, left);
-      if (left === 0) ready.push(edge.target);
+      remaining.set(edge.target, (remaining.get(edge.target) ?? 0) - 1);
     }
   }
   return order.length === index.nodes.size ? order : null;

@@ -29,6 +29,14 @@ describe('topologicalOrder', () => {
     expect(order).toHaveLength(5);
   });
 
+  it('breaks ties by the order of graph.nodes, whatever the order of the edges', () => {
+    const graph: Graph = {
+      nodes: [promptNode('prompt'), generateNode('gen-a'), generateNode('gen-b')],
+      edges: [edge('prompt', 'gen-b', 'prompt'), edge('prompt', 'gen-a', 'prompt')],
+    };
+    expect(topologicalOrder(indexGraph(graph))).toEqual(['prompt', 'gen-a', 'gen-b']);
+  });
+
   it('returns null for a cycle', () => {
     const graph: Graph = {
       nodes: [editNode('a'), editNode('b')],
