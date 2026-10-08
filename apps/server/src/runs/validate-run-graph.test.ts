@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Graph } from '@trafaret/core';
+import { LIMITS, type Graph } from '@trafaret/core';
 import {
   branchingGraph,
   edge,
@@ -55,5 +55,16 @@ describe('validateRunGraph', () => {
     expect(validateRunGraph(graph, context)).toContainEqual(
       expect.objectContaining({ code: 'UNKNOWN_MODEL', nodeId: 'gen-a' }),
     );
+  });
+
+  it('reports only the size limits for a graph over them', () => {
+    // Every node would also get UNKNOWN_MODEL if the server's own checks ran.
+    const nodes = Array.from({ length: LIMITS.nodes + 1 }, (_, i) =>
+      generateNode(`gen${i}`, { modelId: 'imaginary' }),
+    );
+    expect(validateRunGraph({ nodes, edges: [] }, context).map((issue) => issue.code)).toEqual([
+      'LIMIT_EXCEEDED', // nodes
+      'LIMIT_EXCEEDED', // Generate or Edit nodes
+    ]);
   });
 });

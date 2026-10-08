@@ -1,4 +1,4 @@
-import { validateGraph, type Graph, type Issue } from '@trafaret/core';
+import { exceedsSizeLimits, validateGraph, type Graph, type Issue } from '@trafaret/core';
 import type { AssetStore } from '../assets/asset-store.ts';
 import type { ModelCatalog } from '../catalog/catalog.ts';
 import type { PresetRepository } from '../library/preset-repository.ts';
@@ -8,6 +8,8 @@ export type RunGraphContext = { catalog: ModelCatalog; presets: PresetRepository
 /** The shared graph rules plus what only the server knows: models, presets and stored images. */
 export function validateRunGraph(graph: Graph, context: RunGraphContext): Issue[] {
   const issues = validateGraph(graph);
+  // Like validateGraph: only the size issues, so the work and the response stay small for any request body.
+  if (exceedsSizeLimits(graph)) return issues;
   for (const node of graph.nodes) {
     if (node.type === 'generateImage' || node.type === 'editImage') {
       const model = context.catalog.get(node.data.modelId);

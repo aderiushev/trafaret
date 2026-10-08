@@ -147,8 +147,8 @@ type Graph = {
   `UNKNOWN_ASSET`.
 - `validateGraph` replays every edge through `canConnect` against the edges accepted so far — one wiring rule for
   canvas and server — so a rejected edge (for example the one that would close a loop) is reported with its `edgeId`
-  and target `nodeId`. A graph over the node or edge limit returns only its size issues: the per-edge replay is
-  skipped so validation stays cheap for any input.
+  and target `nodeId`. A graph over the node or edge limit gets only its size issues, from the server too: the
+  per-edge replay and the server's catalog/preset/asset checks are skipped, so validation stays cheap for any input.
 - `Issue = { code, message, nodeId?, edgeId? }`.
 - Limits: ≤ 30 nodes, ≤ 60 edges, ≤ 8 AI nodes (`generateImage` + `editImage`), prompt/instruction ≤ 2 000 chars.
 

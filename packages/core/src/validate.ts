@@ -33,6 +33,10 @@ export const issueSchema = z.object({
 });
 export type Issue = z.infer<typeof issueSchema>;
 
+/** Over the node or connection limit, a graph can't run: validation reports only its limit issues. */
+export const exceedsSizeLimits = (graph: Graph): boolean =>
+  graph.nodes.length > LIMITS.nodes || graph.edges.length > LIMITS.edges;
+
 /**
  * Everything that can be checked from the graph alone. An empty array means the graph is runnable.
  * A graph over the node or connection limit gets only its limit issues.
@@ -40,7 +44,7 @@ export type Issue = z.infer<typeof issueSchema>;
 export function validateGraph(graph: Graph): Issue[] {
   const limits = limitIssues(graph);
   // Over-limit graphs can't run anyway; stop before the per-edge replay so the work stays bounded for any input.
-  if (graph.nodes.length > LIMITS.nodes || graph.edges.length > LIMITS.edges) return limits;
+  if (exceedsSizeLimits(graph)) return limits;
   const issues: Issue[] = [...limits, ...duplicateIssues(graph)];
   const accepted = replayEdges(graph, issues);
   for (const node of graph.nodes) {
