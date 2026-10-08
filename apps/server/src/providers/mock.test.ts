@@ -36,7 +36,7 @@ describe('mock provider', () => {
   });
 
   it('renders prompts with characters that XML forbids', async () => {
-    const { bytes } = await instant.generate(request({ prompt: 'A white\u0001 sneaker ￿' }), signal);
+    const { bytes } = await instant.generate(request({ prompt: 'A white\u0001 sneaker \uFFFF' }), signal);
     expect(await sharp(bytes).metadata()).toMatchObject({ format: 'png', width: 64, height: 48 });
   });
 
