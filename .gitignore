@@ -1,0 +1,22 @@
+# dependencies & builds
+node_modules/
+dist/
+coverage/
+.vite/
+*.tsbuildinfo
+
+# env & secrets
+.env
+.env.*
+!.env.example
+
+# test artifacts
+playwright-report/
+test-results/
+
+# local-only notes (never published)
+.private/
+
+# misc
+*.log
+.DS_Store
