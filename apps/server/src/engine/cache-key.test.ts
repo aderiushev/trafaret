@@ -8,6 +8,7 @@ import {
   imageInputNode,
   promptNode,
   resultNode,
+  withNode,
 } from '@trafaret/core/testing';
 import { computeCacheKeys } from './cache-key.ts';
 
@@ -106,6 +107,35 @@ describe('computeCacheKeys', () => {
     });
     const before = keysOf(graph('one'));
     const after = keysOf(graph('two'));
+    expect(after.get('e')).not.toBe(before.get('e'));
+    expect(after.get('r')).not.toBe(before.get('r'));
+  });
+
+  it('model changes a generation key and its dependents', () => {
+    const before = keysOf(branchingGraph());
+    const after = keysOf(
+      withNode(branchingGraph(), generateNode('gen-a', { seed: 1, modelId: 'flux-2-klein' })),
+    );
+    expect(after.get('gen-a')).not.toBe(before.get('gen-a'));
+    expect(after.get('result-a')).not.toBe(before.get('result-a'));
+    expect(after.get('gen-b')).toBe(before.get('gen-b'));
+  });
+
+  const editChain: Graph = {
+    nodes: [imageInputNode('img'), editNode('e'), resultNode('r')],
+    edges: [edge('img', 'e', 'image'), edge('e', 'r', 'image')],
+  };
+
+  it('edit model changes the edit key and its dependents', () => {
+    const before = keysOf(editChain);
+    const after = keysOf(withNode(editChain, editNode('e', { modelId: 'flux-2-klein' })));
+    expect(after.get('e')).not.toBe(before.get('e'));
+    expect(after.get('r')).not.toBe(before.get('r'));
+  });
+
+  it('edit seed changes the edit key and its dependents', () => {
+    const before = keysOf(editChain);
+    const after = keysOf(withNode(editChain, editNode('e', { seed: 2 })));
     expect(after.get('e')).not.toBe(before.get('e'));
     expect(after.get('r')).not.toBe(before.get('r'));
   });
