@@ -145,6 +145,7 @@ function duplicateIssues(graph: Graph): Issue[] {
 
 function valueIssues(node: GraphNode, wired: ReadonlySet<InputHandle>): Issue[] {
   const tooLong = (text: string): boolean => text.length > LIMITS.textLength;
+  const maxLength = LIMITS.textLength.toLocaleString('en-US');
   switch (node.type) {
     case 'prompt':
       if (node.data.text.trim() === '')
@@ -153,7 +154,7 @@ function valueIssues(node: GraphNode, wired: ReadonlySet<InputHandle>): Issue[] 
         ? [
             {
               code: 'LIMIT_EXCEEDED',
-              message: `Keep the prompt under ${LIMITS.textLength} characters.`,
+              message: `Keep the prompt to at most ${maxLength} characters.`,
               nodeId: node.id,
             },
           ]
@@ -173,7 +174,7 @@ function valueIssues(node: GraphNode, wired: ReadonlySet<InputHandle>): Issue[] 
         ? [
             {
               code: 'LIMIT_EXCEEDED',
-              message: `Keep the instruction under ${LIMITS.textLength} characters.`,
+              message: `Keep the instruction to at most ${maxLength} characters.`,
               nodeId: node.id,
             },
           ]

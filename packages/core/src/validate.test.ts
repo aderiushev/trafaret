@@ -156,7 +156,7 @@ describe('validateGraph', () => {
       edges: [edge('p', 'g', 'prompt')],
     };
     expect(validateGraph(long)).toEqual([
-      { code: 'LIMIT_EXCEEDED', message: 'Keep the prompt under 2000 characters.', nodeId: 'p' },
+      { code: 'LIMIT_EXCEEDED', message: 'Keep the prompt to at most 2,000 characters.', nodeId: 'p' },
     ]);
   });
 
@@ -219,7 +219,7 @@ describe('validateGraph', () => {
       });
       expect(validateGraph(withInstruction('x'.repeat(LIMITS.textLength)))).toEqual([]);
       expect(validateGraph(withInstruction('x'.repeat(LIMITS.textLength + 1)))).toEqual([
-        { code: 'LIMIT_EXCEEDED', message: 'Keep the instruction under 2000 characters.', nodeId: 'e' },
+        { code: 'LIMIT_EXCEEDED', message: 'Keep the instruction to at most 2,000 characters.', nodeId: 'e' },
       ]);
     });
   });
