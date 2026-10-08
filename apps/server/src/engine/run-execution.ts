@@ -1,4 +1,4 @@
-import { isAiNodeType, NODE_DEFINITIONS } from '@trafaret/core';
+import { ancestorsOf, descendantsOf, isAiNodeType, NODE_DEFINITIONS } from '@trafaret/core';
 import type {
   GraphIndex,
   Job,
@@ -63,6 +63,38 @@ export class RunExecution {
     for (const nodeId of this.options.order) this.job(nodeId).status = 'queued';
     this.changed();
     await Promise.allSettled(this.options.order.map((nodeId) => this.settle(nodeId)));
+  }
+
+  /** Re-runs a failed node together with the failed ancestors it depends on and the dependents it blocked. */
+  retry(nodeId: string): 'ok' | 'not-failed' {
+    if (this.run.jobs[nodeId]?.status !== 'error') return 'not-failed';
+    const reset = this.resetSet(nodeId);
+    for (const id of reset) {
+      const job = this.job(id);
+      if (job.error?.code !== 'UPSTREAM_FAILED') job.attempt += 1;
+      job.status = 'queued';
+      job.startedAt = null;
+      job.finishedAt = null;
+      delete job.error;
+      delete job.output;
+      delete job.request;
+      delete job.model;
+      this.promises.delete(id);
+    }
+    this.changed();
+    for (const id of reset) void this.settle(id);
+    return 'ok';
+  }
+
+  private resetSet(nodeId: string): Set<string> {
+    const failed = (id: string): boolean => this.run.jobs[id]?.status === 'error';
+    const reset = new Set([nodeId]);
+    for (const id of ancestorsOf(this.options.index, nodeId)) if (failed(id)) reset.add(id);
+    for (const id of [...reset]) {
+      for (const dependent of descendantsOf(this.options.index, id))
+        if (failed(dependent)) reset.add(dependent);
+    }
+    return reset;
   }
 
   private settle(nodeId: string): Promise<NodeOutput> {

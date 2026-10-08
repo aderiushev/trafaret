@@ -74,4 +74,10 @@ export class Engine {
   getRun(runId: string): Run | undefined {
     return this.deps.runs.snapshot(runId);
   }
+
+  retryNode(runId: string, nodeId: string): 'ok' | 'run-not-found' | 'node-not-failed' {
+    const record = this.deps.runs.get(runId);
+    if (!record) return 'run-not-found';
+    return record.execution.retry(nodeId) === 'ok' ? 'ok' : 'node-not-failed';
+  }
 }
