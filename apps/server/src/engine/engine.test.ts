@@ -124,7 +124,12 @@ describe('Engine', () => {
     await vi.waitFor(() => expect(engine.getRun(runId)?.status).toBe('failed'));
     const run = engine.getRun(runId)!;
     for (const id of ['gen-a', 'gen-b']) {
-      expect(run.jobs[id]).toMatchObject({ status: 'error', error: { code: 'TIMEOUT', retryable: true } });
+      expect(run.jobs[id]).toMatchObject({
+        status: 'error',
+        error: { code: 'TIMEOUT', retryable: true },
+        request: { modelId: 'mock' }, // a timed-out job still shows what was sent
+        model: { id: 'mock', provider: 'mock' },
+      });
     }
     // With a single permit, the second call can only exist if the first job gave its permit back at the deadline.
     expect(provider.calls).toHaveLength(2);
@@ -186,9 +191,15 @@ describe('Engine', () => {
     for (const id of ['edit', 'result']) {
       expect(run.jobs[id]).toMatchObject({
         status: 'error',
-        error: { code: 'UPSTREAM_FAILED', upstreamNodeId: 'gen', message: 'Skipped: Generate Image failed.' },
+        error: {
+          code: 'UPSTREAM_FAILED',
+          upstreamNodeId: 'gen',
+          message: 'Skipped: Generate Image failed.',
+          retryable: true, // copied from the root failure, which was retryable
+        },
       });
     }
+    expect(run.jobs['edit']?.request).toBeUndefined(); // nothing was sent for a skipped job
     expect(provider.calls).toHaveLength(1); // the skipped Edit never reached the provider
     expect(run.summary).toMatchObject({ aiNodes: 2, generated: 0, failed: 1 });
   });
@@ -199,13 +210,19 @@ describe('Engine', () => {
     const queued = engine.getRun(runId)!.version;
     await vi.waitFor(() => expect(provider.calls).toHaveLength(2));
     const running = engine.getRun(runId)!.version;
-    provider.call(1).resolve();
+
+    provider.call(1).resolve(); // Generate A is done while Generate B keeps the run going
+    await vi.waitFor(() => expect(engine.getRun(runId)?.jobs['gen-a']?.status).toBe('success'));
+    const partial = engine.getRun(runId)!;
+    expect(partial.status).toBe('running');
+
     provider.call(2).resolve();
     await vi.waitFor(() => expect(engine.getRun(runId)?.status).toBe('completed'));
     const done = engine.getRun(runId)!.version;
     expect(queued).toBe(0);
     expect(running).toBeGreaterThan(queued);
-    expect(done).toBeGreaterThan(running);
+    expect(partial.version).toBeGreaterThan(running); // grows on a change inside a run that is still running
+    expect(done).toBeGreaterThan(partial.version);
   });
 
   it('stamps when every job started and finished', async () => {
@@ -285,5 +302,180 @@ describe('Engine', () => {
       message: 'Something went wrong on our side. Retry in a few seconds.',
       retryable: true,
     });
+  });
+
+  it('shows the request and the model on a job while its provider call is still pending', async () => {
+    const { engine, provider } = await createHarness();
+    const runId = engine.startRun(branchingGraph());
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(2));
+    expect(engine.getRun(runId)?.jobs['gen-a']).toMatchObject({
+      status: 'running',
+      request: { modelId: 'mock', prompt: 'A white sneaker on a stone pedestal', seed: 1 },
+      model: { id: 'mock', provider: 'mock' },
+    });
+  });
+
+  it('keeps the request and the model on a job whose provider call failed', async () => {
+    const { engine, provider } = await createHarness();
+    const runId = engine.startRun(branchingGraph());
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(2));
+    provider.call(1).reject(busy());
+    provider.call(2).resolve();
+
+    await vi.waitFor(() => expect(engine.getRun(runId)?.status).toBe('failed'));
+    const run = engine.getRun(runId)!;
+    expect(run.jobs['gen-a']).toMatchObject({
+      status: 'error',
+      error: { code: 'PROVIDER_ERROR' },
+      request: { modelId: 'mock', prompt: 'A white sneaker on a stone pedestal', seed: 1 },
+      model: { id: 'mock', provider: 'mock' },
+    });
+    expect(run.jobs['result-a']?.request).toBeUndefined(); // the skipped Result never sent anything
+  });
+
+  it('logs each failed job once, and nothing for the jobs skipped because of it', async () => {
+    const warn = vi.fn();
+    const { engine, provider } = await createHarness({ logger: { warn } });
+    const runId = engine.startRun(branchingGraph());
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(2));
+    const failure = busy();
+    provider.call(1).reject(failure);
+    provider.call(2).resolve();
+
+    await vi.waitFor(() => expect(engine.getRun(runId)?.status).toBe('failed'));
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith({ runId, nodeId: 'gen-a', err: failure }, 'job failed');
+  });
+
+  it('records a failed job even when the logger throws', async () => {
+    const warn = vi.fn(() => {
+      throw new Error('logger is down');
+    });
+    const { engine, provider } = await createHarness({ logger: { warn } });
+    const runId = engine.startRun(branchingGraph());
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(2));
+    provider.call(1).reject(busy());
+    provider.call(2).resolve();
+
+    await vi.waitFor(() => expect(engine.getRun(runId)?.status).toBe('failed'));
+    const run = engine.getRun(runId)!;
+    expect(run.jobs['gen-a']).toMatchObject({
+      status: 'error',
+      error: { code: 'PROVIDER_ERROR', retryable: true },
+    });
+    expect(run.jobs['gen-b']?.status).toBe('success');
+  });
+
+  it('logs a run whose execution crashes instead of leaving an unhandled rejection', async () => {
+    const warn = vi.fn();
+    let clockBroken = false;
+    const { engine } = await createHarness({
+      logger: { warn },
+      now: () => {
+        if (clockBroken) throw new Error('clock exploded');
+        return Date.now();
+      },
+    });
+    // startRun returns before the execution begins, so the very first thing start() does (reading the clock) now throws.
+    const runId = engine.startRun(branchingGraph());
+    clockBroken = true;
+
+    await vi.waitFor(() =>
+      expect(warn).toHaveBeenCalledWith(
+        { runId, err: expect.objectContaining({ message: 'clock exploded' }) },
+        'run crashed',
+      ),
+    );
+  });
+
+  it('fails an Image Input whose asset is gone and skips what depends on it', async () => {
+    const graph: Graph = {
+      nodes: [imageInputNode('photo', 'f'.repeat(64)), editNode('edit'), resultNode('result')],
+      edges: [edge('photo', 'edit', 'image'), edge('edit', 'result', 'image')],
+    };
+    const { engine, provider } = await createHarness();
+    const runId = engine.startRun(graph);
+
+    await vi.waitFor(() => expect(engine.getRun(runId)?.status).toBe('failed'));
+    const run = engine.getRun(runId)!;
+    expect(run.jobs['photo']?.error).toMatchObject({ code: 'INVALID_INPUT', retryable: false });
+    for (const id of ['edit', 'result']) {
+      expect(run.jobs[id]?.error).toEqual({
+        code: 'UPSTREAM_FAILED',
+        message: 'Skipped: Image Input failed.',
+        retryable: false, // retrying cannot help: the root failure is not retryable
+        upstreamNodeId: 'photo',
+      });
+    }
+    expect(provider.calls).toHaveLength(0);
+  });
+
+  it('reports a model that is unknown or has no provider as not configured, and not retryable', async () => {
+    const graph: Graph = {
+      nodes: [
+        promptNode('prompt'),
+        generateNode('unknown', { modelId: 'no-such-model', seed: 1 }),
+        generateNode('unconfigured', { modelId: 'flux-2-klein', seed: 2 }), // a known model, but no Cloudflare provider
+        resultNode('result-unknown'),
+        resultNode('result-unconfigured'),
+      ],
+      edges: [
+        edge('prompt', 'unknown', 'prompt'),
+        edge('prompt', 'unconfigured', 'prompt'),
+        edge('unknown', 'result-unknown', 'image'),
+        edge('unconfigured', 'result-unconfigured', 'image'),
+      ],
+    };
+    const { engine, provider } = await createHarness();
+    const runId = engine.startRun(graph);
+
+    await vi.waitFor(() => expect(engine.getRun(runId)?.status).toBe('failed'));
+    const run = engine.getRun(runId)!;
+    for (const id of ['unknown', 'unconfigured']) {
+      expect(run.jobs[id]?.error).toEqual({
+        code: 'PROVIDER_ERROR',
+        message: 'This model is not configured on the server.',
+        retryable: false,
+      });
+    }
+    for (const id of ['result-unknown', 'result-unconfigured']) {
+      expect(run.jobs[id]?.error).toMatchObject({ code: 'UPSTREAM_FAILED', retryable: false });
+    }
+    expect(provider.calls).toHaveLength(0);
+    expect(run.summary).toMatchObject({ aiNodes: 2, generated: 0, failed: 2 });
+  });
+
+  it('fails a job whose provider returned bytes that are not an image', async () => {
+    const { engine, provider } = await createHarness();
+    const runId = engine.startRun(branchingGraph());
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(2));
+    provider.call(1).resolve(Buffer.from('definitely not an image'));
+    provider.call(2).resolve();
+
+    await vi.waitFor(() => expect(engine.getRun(runId)?.status).toBe('failed'));
+    const run = engine.getRun(runId)!;
+    expect(run.jobs['gen-a']).toMatchObject({
+      status: 'error',
+      error: {
+        code: 'PROVIDER_ERROR',
+        message: 'The AI service returned an unreadable image. Retry in a few seconds.',
+        retryable: true,
+      },
+      request: { modelId: 'mock' }, // the request had been sent
+    });
+    expect(run.jobs['gen-b']?.status).toBe('success');
+  });
+
+  it('hands its permit to the next branch when a provider call fails', async () => {
+    const { engine, provider } = await createHarness({ maxConcurrentJobs: 1 });
+    const runId = engine.startRun(branchingGraph());
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(1));
+    provider.calls[0]!.reject(busy());
+
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(2)); // only possible once the permit came back
+    provider.calls[1]!.resolve();
+    await vi.waitFor(() => expect(engine.getRun(runId)?.status).toBe('failed'));
+    const statuses = ['gen-a', 'gen-b'].map((id) => engine.getRun(runId)?.jobs[id]?.status).sort();
+    expect(statuses).toEqual(['error', 'success']);
   });
 });

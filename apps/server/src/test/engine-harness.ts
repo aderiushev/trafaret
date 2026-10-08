@@ -1,4 +1,4 @@
-import { pino } from 'pino';
+import { pino, type Logger } from 'pino';
 import type { ProviderId } from '@trafaret/core';
 import { AssetStore } from '../assets/asset-store.ts';
 import { ModelCatalog } from '../catalog/catalog.ts';
@@ -22,7 +22,8 @@ export const busy = (): ProviderError =>
 export type PendingCall = {
   request: ProviderRequest;
   signal: AbortSignal;
-  resolve: () => void;
+  /** Completes the call with the harness image, or with the given bytes (e.g. to model an unreadable reply). */
+  resolve: (bytes?: Buffer) => void;
   reject: (error: Error) => void;
 };
 
@@ -43,7 +44,12 @@ export class ControlledProvider implements ImageProvider {
 
   generate(request: ProviderRequest, signal: AbortSignal): Promise<ProviderResult> {
     return new Promise((resolve, reject) => {
-      this.calls.push({ request, signal, resolve: () => resolve({ bytes: this.image }), reject });
+      this.calls.push({
+        request,
+        signal,
+        resolve: (bytes) => resolve({ bytes: bytes ?? this.image }),
+        reject,
+      });
       if (this.ignoreAbort) return;
       signal.addEventListener(
         'abort',
@@ -69,6 +75,9 @@ export type HarnessOptions = {
   realMock?: boolean;
   /** The controlled provider never reacts to the abort signal, like a provider that ignores timeouts. */
   ignoreAbort?: boolean;
+  /** Replaces the silent logger, e.g. with a spy. */
+  logger?: Pick<Logger, 'warn'>;
+  /** The clock for the engine and the run repository. */
   now?: () => number;
 };
 
@@ -82,16 +91,17 @@ export async function createHarness(options: HarnessOptions = {}) {
   const providers: Partial<Record<ProviderId, ImageProvider>> = {
     mock: options.realMock ? createMockProvider({ latencyMs: { min: 0, max: 0 } }) : provider,
   };
+  const clock = options.now ? { now: options.now } : {};
   const engine = new Engine({
     catalog,
     presets,
     assets,
     providers,
-    runs: new RunRepository({ maxRuns: 50, retentionMs: 60 * 60 * 1000 }),
+    runs: new RunRepository({ maxRuns: 50, retentionMs: 60 * 60 * 1000, ...clock }),
     semaphore: new Semaphore(options.maxConcurrentJobs ?? 4),
     jobTimeoutMs: options.jobTimeoutMs ?? 5_000,
-    logger: pino({ level: 'silent' }),
-    ...(options.now ? { now: options.now } : {}),
+    logger: options.logger ?? pino({ level: 'silent' }),
+    ...clock,
   });
   return { engine, provider, assets, catalog, presets };
 }

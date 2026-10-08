@@ -63,7 +63,10 @@ export class Engine {
     });
     this.deps.runs.add({ run, execution });
     setImmediate(() => {
-      void execution.start();
+      // start() settles every node itself and is not expected to reject; if it ever does, log it, never crash on it.
+      void execution.start().catch((error: unknown) => {
+        this.deps.logger.warn({ runId: run.id, err: error }, 'run crashed');
+      });
     });
     return run.id;
   }

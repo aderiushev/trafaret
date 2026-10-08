@@ -15,7 +15,7 @@ import type { PresetRepository } from '../library/preset-repository.ts';
 import type { ImageProvider } from '../providers/types.ts';
 import { JobFailure } from './errors.ts';
 import { buildRequest } from './request-builder.ts';
-import type { ExecutedNode, NodeExecutor, NodeInputs } from './run-execution.ts';
+import type { ExecutedNode, NodeExecutionContext, NodeExecutor, NodeInputs } from './run-execution.ts';
 
 export type NodeExecutorDeps = {
   catalog: ModelCatalog;
@@ -83,7 +83,7 @@ async function runAiNode(
   node: GraphNodeOf<'generateImage'> | GraphNodeOf<'editImage'>,
   inputs: NodeInputs,
   attempt: number,
-  markRunning: () => void,
+  markRunning: NodeExecutionContext['markRunning'],
   deps: NodeExecutorDeps,
 ): Promise<ExecutedNode> {
   const model = deps.catalog.definition(node.data.modelId);
@@ -112,8 +112,9 @@ async function runAiNode(
 
   const release = await deps.semaphore.acquire();
   try {
-    markRunning();
     const target = pickProvider(model, deps);
+    // From here on the job shows what it sends, while the call is pending and if it fails or times out.
+    markRunning({ request: built.preview, model: target.jobModel });
     const result = await withTimeout(deps.jobTimeoutMs, (signal) =>
       target.provider.generate(
         {

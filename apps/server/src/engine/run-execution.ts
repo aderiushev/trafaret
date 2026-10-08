@@ -13,11 +13,14 @@ import { toJobError } from './errors.ts';
 
 export type NodeInputs = { prompt?: NodeOutput; image?: NodeOutput };
 export type ExecutedNode = { output: NodeOutput; request?: RequestPreview; model?: JobModel };
+/** What the inspector shows for a job that has been sent to a provider: the request and the model handling it. */
+export type RunningDetails = { request: RequestPreview; model: JobModel };
 export type NodeExecutionContext = {
   nodeId: string;
   inputs: NodeInputs;
   attempt: number;
-  markRunning: () => void;
+  /** Marks the job running. AI nodes pass `details` so the request is visible while it runs and after it fails. */
+  markRunning: (details?: RunningDetails) => void;
 };
 export type NodeExecutor = (context: NodeExecutionContext) => Promise<ExecutedNode>;
 
@@ -81,7 +84,8 @@ export class RunExecution {
       this.fail(job, {
         code: 'UPSTREAM_FAILED',
         message: `Skipped: ${this.label(rootNodeId)} failed.`,
-        retryable: true,
+        // Retrying a skipped node cannot help unless its root failure can be retried.
+        retryable: this.run.jobs[rootNodeId]?.error?.retryable ?? true,
         upstreamNodeId: rootNodeId,
       });
       throw new UpstreamFailure(rootNodeId);
@@ -91,13 +95,14 @@ export class RunExecution {
         nodeId,
         inputs,
         attempt: job.attempt,
-        markRunning: () => this.markRunning(job),
+        markRunning: (details) => this.markRunning(job, details),
       });
       this.succeed(job, executed);
       return executed.output;
     } catch (error) {
-      this.options.onJobFailed(nodeId, error);
+      // Record the failure first: a logger that throws must not leave the job running.
       this.fail(job, toJobError(error));
+      this.options.onJobFailed(nodeId, error);
       throw new UpstreamFailure(nodeId);
     }
   }
@@ -112,9 +117,13 @@ export class RunExecution {
     return inputs;
   }
 
-  private markRunning(job: Job): void {
+  private markRunning(job: Job, details?: RunningDetails): void {
     job.status = 'running';
     job.startedAt = this.options.now();
+    if (details) {
+      job.request = details.request;
+      job.model = details.model;
+    }
     this.changed();
   }
 
