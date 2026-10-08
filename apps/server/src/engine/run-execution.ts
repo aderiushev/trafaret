@@ -55,13 +55,15 @@ export class RunExecution {
   private readonly options: RunExecutionOptions;
   private readonly promises = new Map<string, Promise<NodeOutput>>();
   private readonly hits = new Map<string, CacheEntry>();
+  /** Nodes whose result is a budget-fallback result or was built on one (see `isFallbackDerived`). */
+  private readonly tainted = new Set<string>();
 
   constructor(run: Run, options: RunExecutionOptions) {
     this.run = run;
     this.options = options;
   }
 
-  /** Marks cache hits as done, queues the rest and settles every node; resolves once nothing is left to run. */
+  /** Marks cache hits as done, queues the rest and settles every node, until nothing is left to run. */
   async start(): Promise<void> {
     const startedAt = this.options.now();
     this.run.startedAt = startedAt;
@@ -153,7 +155,8 @@ export class RunExecution {
         markRunning: (details) => this.markRunning(job, details),
       });
       this.succeed(job, executed);
-      this.remember(nodeId, job, executed);
+      if (this.isFallbackDerived(nodeId, executed)) this.tainted.add(nodeId);
+      else this.remember(nodeId, job, executed);
       return executed.output;
     } catch (error) {
       // Record the failure first: a logger that throws must not leave the job running.
@@ -194,19 +197,21 @@ export class RunExecution {
     this.changed();
   }
 
-  /** Stores successful AI results under the node's cache key; fallbacks and failures are never cached. */
+  /**
+   * True for a budget-fallback result and for everything built on one, however many nodes away. Cache keys
+   * are input-addressed and assume the upstream outputs are the real ones, so such a result is never stored.
+   * Nodes reused at planning time are never tainted: their entries were stored from real inputs.
+   */
+  private isFallbackDerived(nodeId: string, executed: ExecutedNode): boolean {
+    if (executed.model?.fallbackFrom !== undefined) return true;
+    return (this.options.index.incoming.get(nodeId) ?? []).some((edge) => this.tainted.has(edge.source));
+  }
+
+  /** Stores a successful AI result under the node's cache key. */
   private remember(nodeId: string, job: Job, executed: ExecutedNode): void {
     const key = this.options.cacheKeys.get(nodeId);
     const { output, request, model } = executed;
-    if (
-      key === undefined ||
-      output.kind !== 'image' ||
-      !request ||
-      !model ||
-      model.fallbackFrom !== undefined
-    ) {
-      return;
-    }
+    if (key === undefined || output.kind !== 'image' || !request || !model) return;
     this.options.cache.set(key, {
       output,
       request,

@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Graph } from '@trafaret/core';
-import { branchingGraph, edge, editNode, generateNode, promptNode, withNode } from '@trafaret/core/testing';
+import {
+  branchingGraph,
+  edge,
+  editNode,
+  generateNode,
+  promptNode,
+  resultNode,
+  withNode,
+} from '@trafaret/core/testing';
 import type { ResolvedPreset } from '../library/preset-repository.ts';
 import { busy, createHarness } from '../test/engine-harness.ts';
 
@@ -162,5 +170,66 @@ describe('incremental runs', () => {
 
     provider.calls.forEach((call) => call.resolve());
     await vi.waitFor(() => expect(engine.getRun(runId)?.status).toBe('completed'));
+  });
+
+  it('never caches a result made from a budget fallback, nor anything built on it', async () => {
+    // Branch A starts with a Generate that runs on Mock past its cap, so both Edits below it are made from
+    // that placeholder. Branch B does not depend on it.
+    const graph: Graph = {
+      nodes: [
+        promptNode('prompt'),
+        generateNode('gen-a', { seed: 1, modelId: 'flux-2-klein' }),
+        editNode('edit-1', { seed: 2 }),
+        editNode('edit-2', { seed: 3 }),
+        resultNode('result-a'),
+        generateNode('gen-b', { seed: 4 }),
+        resultNode('result-b'),
+      ],
+      edges: [
+        edge('prompt', 'gen-a', 'prompt'),
+        edge('gen-a', 'edit-1', 'image'),
+        edge('edit-1', 'edit-2', 'image'),
+        edge('edit-2', 'result-a', 'image'),
+        edge('prompt', 'gen-b', 'prompt'),
+        edge('gen-b', 'result-b', 'image'),
+      ],
+    };
+    const { engine } = await createHarness({
+      realMock: true,
+      credentials: { cloudflare: true },
+      dailyLimits: { cloudflare: 0 },
+      maxConcurrentJobs: 1, // one job at a time: Generate B is stored after Generate A has fallen back
+    });
+    const first = engine.startRun(graph);
+    await vi.waitFor(() => expect(engine.getRun(first)?.status).toBe('completed'));
+    // Only Generate A is a fallback: the Edits ran on their own (Mock) model.
+    expect(engine.getRun(first)?.summary).toMatchObject({ generated: 3, fallbacks: 1 });
+
+    const second = engine.startRun(graph);
+    await vi.waitFor(() => expect(engine.getRun(second)?.status).toBe('completed'));
+    const run = engine.getRun(second)!;
+    for (const id of ['gen-a', 'edit-1', 'edit-2']) expect(run.jobs[id]?.cached, id).toBe(false);
+    expect(run.jobs['gen-b']?.cached).toBe(true);
+    expect(run.summary).toMatchObject({ reused: 1, generated: 2, fallbacks: 1 });
+  });
+
+  it('serves calls up to the daily cap, then falls back until the cap starts over at 00:00 UTC', async () => {
+    // The harness has no real providers, so the Mock model stands in for one: a cap of 1 allows a call a day.
+    let now = Date.parse('2026-10-08T23:59:00Z');
+    const { engine } = await createHarness({ realMock: true, dailyLimits: { mock: 1 }, now: () => now });
+    const modelOf = async (seed: number) => {
+      const graph: Graph = {
+        nodes: [promptNode('prompt'), generateNode('gen', { seed })],
+        edges: [edge('prompt', 'gen', 'prompt')],
+      };
+      const runId = engine.startRun(graph);
+      await vi.waitFor(() => expect(engine.getRun(runId)?.status).toBe('completed'));
+      return engine.getRun(runId)?.jobs['gen']?.model;
+    };
+
+    expect(await modelOf(1)).toEqual({ id: 'mock', provider: 'mock' });
+    expect(await modelOf(2)).toEqual({ id: 'mock', provider: 'mock', fallbackFrom: 'mock' });
+    now = Date.parse('2026-10-09T00:00:01Z');
+    expect(await modelOf(3)).toEqual({ id: 'mock', provider: 'mock' });
   });
 });

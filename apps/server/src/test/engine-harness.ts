@@ -79,12 +79,14 @@ export type HarnessOptions = {
   ignoreAbort?: boolean;
   /** Replaces the silent logger, e.g. with a spy. */
   logger?: Pick<Logger, 'warn'>;
-  /** The clock for the engine and the run repository. */
+  /** The clock for the engine, the run repository and the daily budget. */
   now?: () => number;
   /** Which provider credentials the catalog sees; the harness itself only ever builds the mock provider. */
   credentials?: { cloudflare?: boolean; byteplus?: boolean };
-  /** Daily caps per provider (none means unlimited); a cap of 0 sends the provider's models to the Mock fallback. */
+  /** Daily caps per provider (none means unlimited); a cap of 0 sends its models to the Mock fallback. */
   dailyLimits?: Partial<Record<ProviderId, number>>;
+  /** How many results the cache keeps (default 100); a tiny cache makes older results fall out of it. */
+  cacheEntries?: number;
 };
 
 export async function createHarness(options: HarnessOptions = {}) {
@@ -97,7 +99,10 @@ export async function createHarness(options: HarnessOptions = {}) {
     byteplus: options.credentials?.byteplus ? { apiKey: 'key' } : null,
   });
   const presets = new PresetRepository(options.presets ?? []);
-  const cache = new ResultCache({ maxEntries: 100, isValid: (entry) => assets.has(entry.output.assetId) });
+  const cache = new ResultCache({
+    maxEntries: options.cacheEntries ?? 100,
+    isValid: (entry) => assets.has(entry.output.assetId),
+  });
   const providers: Partial<Record<ProviderId, ImageProvider>> = {
     mock: options.realMock ? createMockProvider({ latencyMs: { min: 0, max: 0 } }) : provider,
   };
@@ -110,7 +115,7 @@ export async function createHarness(options: HarnessOptions = {}) {
     cache,
     runs: new RunRepository({ maxRuns: 50, retentionMs: 60 * 60 * 1000, ...clock }),
     semaphore: new Semaphore(options.maxConcurrentJobs ?? 4),
-    budget: new DailyBudget(options.dailyLimits ?? {}),
+    budget: new DailyBudget(options.dailyLimits ?? {}, options.now),
     jobTimeoutMs: options.jobTimeoutMs ?? 5_000,
     logger: options.logger ?? pino({ level: 'silent' }),
     ...clock,

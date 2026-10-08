@@ -170,15 +170,13 @@ describe('retry', () => {
   });
 
   it('leaves a reused node alone when the failed node above it is retried', async () => {
-    // Past its daily budget Generate runs on Mock, which is never cached; the Edit below it is.
-    const { engine, provider } = await createHarness({
-      credentials: { cloudflare: true },
-      dailyLimits: { cloudflare: 0 },
-    });
+    // Room for one result only: storing Edit's pushes Generate's out, so the next run finds Edit reused
+    // below a Generate that has to be called again.
+    const { engine, provider } = await createHarness({ cacheEntries: 1 });
     const graph: Graph = {
       nodes: [
         promptNode('prompt'),
-        generateNode('gen', { seed: 1, modelId: 'flux-2-klein' }),
+        generateNode('gen', { seed: 1 }),
         editNode('edit', { seed: 2 }),
         resultNode('result'),
       ],
@@ -191,7 +189,7 @@ describe('retry', () => {
     provider.call(2).resolve();
     await vi.waitFor(() => expect(engine.getRun(first)?.status).toBe('completed'));
 
-    // The second run generates again, while Edit is reused without waiting for it.
+    // The second run calls Generate again, while Edit is reused without waiting for it.
     const second = engine.startRun(graph);
     await vi.waitFor(() => expect(provider.calls).toHaveLength(3));
     expect(provider.calls[2]?.request).toMatchObject({ mode: 'generate', seed: 1, attempt: 1 });
@@ -235,5 +233,41 @@ describe('retry', () => {
     const run = engine.getRun(second)!;
     expect(run.jobs['gen-b']).toMatchObject({ status: 'success', cached: true, attempt: 1 });
     expect(run.summary).toMatchObject({ generated: 1, reused: 1, failed: 0 });
+  });
+
+  it('keeps a retried result that is built on a budget fallback out of the cache', async () => {
+    const { engine, provider } = await createHarness({
+      credentials: { cloudflare: true },
+      dailyLimits: { cloudflare: 0 },
+    });
+    const graph: Graph = {
+      nodes: [
+        promptNode('prompt'),
+        generateNode('gen', { seed: 1, modelId: 'flux-2-klein' }),
+        editNode('edit', { seed: 2 }),
+        resultNode('result'),
+      ],
+      edges: [edge('prompt', 'gen', 'prompt'), edge('gen', 'edit', 'image'), edge('edit', 'result', 'image')],
+    };
+    const first = engine.startRun(graph);
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(1));
+    provider.call(1).resolve(); // Generate runs on Mock past its cap…
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(2));
+    provider.call(2).reject(busy()); // …and the Edit below it fails
+    await vi.waitFor(() => expect(engine.getRun(first)?.status).toBe('failed'));
+
+    expect(engine.retryNode(first, 'edit')).toBe('ok');
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(3));
+    provider.calls[2]!.resolve();
+    await vi.waitFor(() => expect(engine.getRun(first)?.status).toBe('completed'));
+
+    // The retried Edit is still made from the fallback image, so the next run makes it again.
+    const second = engine.startRun(graph);
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(4));
+    provider.calls[3]!.resolve();
+    await vi.waitFor(() => expect(provider.calls).toHaveLength(5));
+    provider.calls[4]!.resolve();
+    await vi.waitFor(() => expect(engine.getRun(second)?.status).toBe('completed'));
+    expect(engine.getRun(second)?.jobs['edit']?.cached).toBe(false);
   });
 });
