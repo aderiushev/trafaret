@@ -2,7 +2,14 @@ import sharp from 'sharp';
 import { ASPECT_RATIOS, type AspectRatio } from '@trafaret/core';
 
 export type ImageFormat = 'png' | 'jpeg' | 'webp';
-export type ImageInfo = { format: ImageFormat; mime: string; width: number; height: number };
+export type ImageInfo = {
+  format: ImageFormat;
+  mime: string;
+  width: number;
+  height: number;
+  /** EXIF orientation: 1 is upright, and 1 is also reported when the tag is absent. */
+  orientation: number;
+};
 
 const MIME_BY_FORMAT: Record<ImageFormat, string> = {
   png: 'image/png',
@@ -12,12 +19,28 @@ const MIME_BY_FORMAT: Record<ImageFormat, string> = {
 const isSupported = (format: string | undefined): format is ImageFormat =>
   format === 'png' || format === 'jpeg' || format === 'webp';
 
-/** Reads the real format from the bytes (never trusts a file name or Content-Type). SVG is rejected on purpose. */
+/**
+ * Reads the real format from the bytes (never trusts a file name or Content-Type). SVG is rejected on purpose.
+ * width and height are the displayed size: EXIF orientations 5 to 8 turn the image by 90 degrees, so they swap.
+ * Header-only and without a pixel limit, so a huge image still reports its size.
+ */
 export async function inspectImage(bytes: Buffer): Promise<ImageInfo | null> {
   try {
-    const { format, width, height } = await sharp(bytes).metadata();
+    const {
+      format,
+      width,
+      height,
+      orientation = 1,
+    } = await sharp(bytes, { limitInputPixels: false }).metadata();
     if (!isSupported(format) || !width || !height) return null;
-    return { format, mime: MIME_BY_FORMAT[format], width, height };
+    const swapsAxes = orientation >= 5;
+    return {
+      format,
+      mime: MIME_BY_FORMAT[format],
+      width: swapsAxes ? height : width,
+      height: swapsAxes ? width : height,
+      orientation,
+    };
   } catch {
     return null;
   }
@@ -26,9 +49,13 @@ export async function inspectImage(bytes: Buffer): Promise<ImageInfo | null> {
 export const toWebp = (bytes: Buffer, quality = 90): Promise<Buffer> =>
   sharp(bytes).webp({ quality }).toBuffer();
 
-/** Shrinks (never enlarges) an image to fit a square box; re-encodes as PNG. */
+/** Applies the EXIF orientation to the pixels and drops the tag, keeping the format. */
+export const uprightImage = (bytes: Buffer): Promise<Buffer> => sharp(bytes).autoOrient().toBuffer();
+
+/** Applies the EXIF orientation, then shrinks (never enlarges) to fit a square box; re-encodes as PNG. */
 export const fitWithin = (bytes: Buffer, maxSide: number): Promise<Buffer> =>
   sharp(bytes)
+    .autoOrient()
     .resize({ width: maxSide, height: maxSide, fit: 'inside', withoutEnlargement: true })
     .png()
     .toBuffer();

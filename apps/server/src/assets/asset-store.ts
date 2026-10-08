@@ -1,5 +1,5 @@
 import { sha256Hex } from '../lib/hash.ts';
-import { inspectImage } from './image.ts';
+import { inspectImage, uprightImage, type ImageInfo } from './image.ts';
 
 export type StoredAsset = {
   readonly id: string;
@@ -17,9 +17,26 @@ export class UnsupportedImageError extends Error {
   }
 }
 
+/** Validates the bytes; a photo with an EXIF rotation becomes its upright pixels, with their displayed size. */
+async function toUpright(bytes: Buffer): Promise<{ bytes: Buffer; info: ImageInfo }> {
+  const info = await inspectImage(bytes);
+  if (!info) throw new UnsupportedImageError();
+  if (info.orientation === 1) return { bytes, info };
+  let upright: Buffer;
+  try {
+    upright = await uprightImage(bytes);
+  } catch {
+    throw new UnsupportedImageError();
+  }
+  const uprightInfo = await inspectImage(upright);
+  if (!uprightInfo) throw new UnsupportedImageError();
+  return { bytes: upright, info: uprightInfo };
+}
+
 /**
- * In-memory, content-addressed image store. The id is the SHA-256 of the bytes, so identical images dedupe and an
- * id never points at different content. Past `maxBytes`, the least recently used unpinned images are evicted.
+ * In-memory, content-addressed image store. The id is the SHA-256 of the stored bytes, so identical images dedupe and
+ * an id never points at different content. Rotated photos are stored upright. Past `maxBytes`, the least recently used
+ * unpinned images are evicted.
  */
 export class AssetStore {
   private readonly assets = new Map<string, StoredAsset>();
@@ -31,10 +48,9 @@ export class AssetStore {
   }
 
   async put(bytes: Buffer, options: { pinned?: boolean } = {}): Promise<StoredAsset> {
-    const id = sha256Hex(bytes);
     // Await before the lookup, never between it and the insert: concurrent puts would double-count bytes.
-    const info = await inspectImage(bytes);
-    if (!info) throw new UnsupportedImageError();
+    const { bytes: upright, info } = await toUpright(bytes);
+    const id = sha256Hex(upright);
     const existing = this.assets.get(id);
     if (existing) {
       if (options.pinned) existing.pinned = true;
@@ -43,14 +59,14 @@ export class AssetStore {
     }
     const asset: StoredAsset = {
       id,
-      bytes,
+      bytes: upright,
       mime: info.mime,
       width: info.width,
       height: info.height,
       pinned: options.pinned ?? false,
     };
     this.assets.set(id, asset);
-    this.totalBytes += bytes.length;
+    this.totalBytes += upright.length;
     this.evict();
     return asset;
   }

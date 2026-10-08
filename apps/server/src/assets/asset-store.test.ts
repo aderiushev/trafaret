@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { sha256Hex } from '../lib/hash.ts';
-import { makePng } from '../test/images.ts';
+import { makePng, makeRotatedJpeg } from '../test/images.ts';
 import { AssetStore, UnsupportedImageError } from './asset-store.ts';
+import { inspectImage } from './image.ts';
 
 describe('AssetStore', () => {
   it('stores images under the SHA-256 of their bytes', async () => {
@@ -18,6 +19,13 @@ describe('AssetStore', () => {
     expect(store.get(asset.id)?.bytes.equals(png)).toBe(true);
   });
 
+  it('stores rotated photos upright', async () => {
+    const store = new AssetStore({ maxBytes: 1_000_000 });
+    const asset = await store.put(await makeRotatedJpeg());
+    expect(asset).toMatchObject({ mime: 'image/jpeg', width: 20, height: 40 });
+    expect((await inspectImage(asset.bytes))?.orientation).toBe(1);
+  });
+
   it('deduplicates identical images', async () => {
     const png = await makePng();
     const store = new AssetStore({ maxBytes: 1_000_000 });
@@ -29,7 +37,8 @@ describe('AssetStore', () => {
   it('deduplicates identical images that arrive concurrently', async () => {
     const png = await makePng();
     const store = new AssetStore({ maxBytes: 1_000_000 });
-    await Promise.all([store.put(png), store.put(png)]);
+    const [first, second] = await Promise.all([store.put(png), store.put(png)]);
+    expect(second).toBe(first);
     expect(store.usage).toEqual({ count: 1, bytes: png.length });
   });
 
