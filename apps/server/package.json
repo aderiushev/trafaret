@@ -16,6 +16,7 @@
     "@trafaret/core": "workspace:*",
     "fastify": "^5.12.5",
     "fastify-type-provider-zod": "^7.0.0",
+    "nanoid": "^6.0.2",
     "pino": "^10.4.0",
     "sharp": "^0.35.5",
     "zod": "^4.6.5"

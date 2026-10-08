@@ -1,0 +1,177 @@
+import { isAiNodeType, NODE_DEFINITIONS } from '@trafaret/core';
+import type {
+  GraphIndex,
+  Job,
+  JobError,
+  JobModel,
+  NodeOutput,
+  RequestPreview,
+  Run,
+  RunSummary,
+} from '@trafaret/core';
+import { toJobError } from './errors.ts';
+
+export type NodeInputs = { prompt?: NodeOutput; image?: NodeOutput };
+export type ExecutedNode = { output: NodeOutput; request?: RequestPreview; model?: JobModel };
+export type NodeExecutionContext = {
+  nodeId: string;
+  inputs: NodeInputs;
+  attempt: number;
+  markRunning: () => void;
+};
+export type NodeExecutor = (context: NodeExecutionContext) => Promise<ExecutedNode>;
+
+export type RunExecutionOptions = {
+  index: GraphIndex;
+  order: readonly string[];
+  executeNode: NodeExecutor;
+  now: () => number;
+  onJobFailed: (nodeId: string, error: unknown) => void;
+};
+
+/** Rejection that tells dependents which node actually failed. */
+class UpstreamFailure extends Error {
+  readonly rootNodeId: string;
+
+  constructor(rootNodeId: string) {
+    super(`Node ${rootNodeId} failed`);
+    this.name = 'UpstreamFailure';
+    this.rootNodeId = rootNodeId;
+  }
+}
+
+/**
+ * Executes one run. Each node is a memoised promise that awaits only its own inputs, so independent branches run
+ * concurrently and a node starts the moment its dependencies succeed — not level by level.
+ */
+export class RunExecution {
+  readonly run: Run;
+  private readonly options: RunExecutionOptions;
+  private readonly promises = new Map<string, Promise<NodeOutput>>();
+
+  constructor(run: Run, options: RunExecutionOptions) {
+    this.run = run;
+    this.options = options;
+  }
+
+  /** Queues every node and settles all of them; resolves once nothing is left to run. */
+  async start(): Promise<void> {
+    this.run.startedAt = this.options.now();
+    for (const nodeId of this.options.order) this.job(nodeId).status = 'queued';
+    this.changed();
+    await Promise.allSettled(this.options.order.map((nodeId) => this.settle(nodeId)));
+  }
+
+  private settle(nodeId: string): Promise<NodeOutput> {
+    const existing = this.promises.get(nodeId);
+    if (existing) return existing;
+    const promise = this.execute(nodeId);
+    promise.catch(() => undefined); // failures are recorded on the job itself
+    this.promises.set(nodeId, promise);
+    return promise;
+  }
+
+  private async execute(nodeId: string): Promise<NodeOutput> {
+    const job = this.job(nodeId);
+    let inputs: NodeInputs;
+    try {
+      inputs = await this.collectInputs(nodeId);
+    } catch (error) {
+      const rootNodeId = error instanceof UpstreamFailure ? error.rootNodeId : nodeId;
+      this.fail(job, {
+        code: 'UPSTREAM_FAILED',
+        message: `Skipped: ${this.label(rootNodeId)} failed.`,
+        retryable: true,
+        upstreamNodeId: rootNodeId,
+      });
+      throw new UpstreamFailure(rootNodeId);
+    }
+    try {
+      const executed = await this.options.executeNode({
+        nodeId,
+        inputs,
+        attempt: job.attempt,
+        markRunning: () => this.markRunning(job),
+      });
+      this.succeed(job, executed);
+      return executed.output;
+    } catch (error) {
+      this.options.onJobFailed(nodeId, error);
+      this.fail(job, toJobError(error));
+      throw new UpstreamFailure(nodeId);
+    }
+  }
+
+  private async collectInputs(nodeId: string): Promise<NodeInputs> {
+    const edges = this.options.index.incoming.get(nodeId) ?? [];
+    const outputs = await Promise.all(edges.map((edge) => this.settle(edge.source)));
+    const inputs: NodeInputs = {};
+    edges.forEach((edge, position) => {
+      inputs[edge.targetHandle] = outputs[position];
+    });
+    return inputs;
+  }
+
+  private markRunning(job: Job): void {
+    job.status = 'running';
+    job.startedAt = this.options.now();
+    this.changed();
+  }
+
+  private succeed(job: Job, executed: ExecutedNode): void {
+    const now = this.options.now();
+    job.status = 'success';
+    job.startedAt ??= now;
+    job.finishedAt = now;
+    job.output = executed.output;
+    if (executed.request) job.request = executed.request;
+    if (executed.model) job.model = executed.model;
+    this.changed();
+  }
+
+  private fail(job: Job, error: JobError): void {
+    job.status = 'error';
+    job.finishedAt = this.options.now();
+    job.error = error;
+    this.changed();
+  }
+
+  private job(nodeId: string): Job {
+    const job = this.run.jobs[nodeId];
+    if (!job) throw new Error(`Run ${this.run.id} has no job for node ${nodeId}`);
+    return job;
+  }
+
+  private label(nodeId: string): string {
+    const node = this.options.index.nodes.get(nodeId);
+    return node ? NODE_DEFINITIONS[node.type].label : nodeId;
+  }
+
+  /** Derives the run status and summary from the jobs and bumps the version on every change. */
+  private changed(): void {
+    const jobs = Object.values(this.run.jobs);
+    const active = jobs.some(
+      (job) => job.status === 'idle' || job.status === 'queued' || job.status === 'running',
+    );
+    const failed = jobs.some((job) => job.status === 'error');
+    this.run.status =
+      this.run.startedAt === null ? 'queued' : active ? 'running' : failed ? 'failed' : 'completed';
+    const terminal = this.run.status === 'completed' || this.run.status === 'failed';
+    this.run.finishedAt = terminal ? (this.run.finishedAt ?? this.options.now()) : null;
+    this.run.summary = summarize(jobs);
+    this.run.version += 1;
+  }
+}
+
+export function summarize(jobs: readonly Job[], savedMs = 0): RunSummary {
+  const ai = jobs.filter((job) => isAiNodeType(job.nodeType));
+  const succeeded = ai.filter((job) => job.status === 'success' && !job.cached);
+  return {
+    aiNodes: ai.length,
+    generated: succeeded.filter((job) => job.model?.fallbackFrom === undefined).length,
+    reused: ai.filter((job) => job.cached).length,
+    failed: jobs.filter((job) => job.status === 'error' && job.error?.code !== 'UPSTREAM_FAILED').length,
+    savedMs,
+    fallbacks: succeeded.filter((job) => job.model?.fallbackFrom !== undefined).length,
+  };
+}
