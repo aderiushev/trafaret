@@ -29,10 +29,12 @@ describe('canConnect', () => {
   it('blocks incompatible port types with a readable reason', () => {
     expect(canConnect(index, connect('p', 'e', 'image'))).toEqual({
       ok: false,
+      code: 'PORT_TYPE_MISMATCH',
       reason: "Text output can't feed an image input.",
     });
     expect(canConnect(index, connect('img', 'g', 'prompt'))).toEqual({
       ok: false,
+      code: 'PORT_TYPE_MISMATCH',
       reason: "Image output can't feed a text input.",
     });
   });
@@ -40,6 +42,7 @@ describe('canConnect', () => {
   it('blocks a second wire into the same input', () => {
     expect(canConnect(index, connect('img', 'r', 'image'))).toEqual({
       ok: false,
+      code: 'INPUT_ALREADY_CONNECTED',
       reason: 'The Image input is already connected.',
     });
   });
@@ -51,17 +54,31 @@ describe('canConnect', () => {
     });
     expect(canConnect(chain, connect('b', 'a', 'image'))).toEqual({
       ok: false,
+      code: 'CYCLE',
       reason: 'This connection would create a loop.',
     });
     expect(canConnect(chain, connect('a', 'a', 'prompt'))).toEqual({
       ok: false,
+      code: 'CYCLE',
       reason: "A node can't connect to itself.",
     });
   });
 
   it('blocks unknown nodes and handles', () => {
-    expect(canConnect(index, connect('ghost', 'e', 'image')).ok).toBe(false);
-    expect(canConnect(index, connect('img', 'e', 'mask')).ok).toBe(false);
-    expect(canConnect(index, { ...connect('r', 'e', 'image') }).ok).toBe(false); // Result has no output
+    expect(canConnect(index, connect('ghost', 'e', 'image'))).toEqual({
+      ok: false,
+      code: 'DANGLING_EDGE',
+      reason: 'Both ends must be nodes on the canvas.',
+    });
+    expect(canConnect(index, connect('img', 'e', 'mask'))).toEqual({
+      ok: false,
+      code: 'DANGLING_EDGE',
+      reason: 'Edit Image has no such input.',
+    });
+    expect(canConnect(index, { ...connect('r', 'e', 'image') })).toEqual({
+      ok: false,
+      code: 'DANGLING_EDGE',
+      reason: 'Result has no such output.',
+    }); // Result has no output
   });
 });
