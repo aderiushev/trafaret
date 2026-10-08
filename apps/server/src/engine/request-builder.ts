@@ -25,7 +25,12 @@ export type BuiltRequest = {
   preview: RequestPreview;
 };
 
-const trimTrailingPunctuation = (text: string): string => text.trim().replace(/[\s.,;:!?]+$/u, '');
+/** Cosmetic: drops trailing punctuation before joining, but never erases the whole text. */
+const trimTrailingPunctuation = (text: string): string => {
+  const trimmed = text.trim();
+  const stripped = trimmed.replace(/[\s.,;:!?]+$/u, '');
+  return stripped || trimmed;
+};
 
 /** Pure: user prompt + selected preset + model capabilities → one provider request. */
 export function buildRequest(input: RequestBuilderInput): BuiltRequest {

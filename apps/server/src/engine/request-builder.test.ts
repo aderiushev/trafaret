@@ -86,4 +86,8 @@ describe('buildRequest', () => {
       /^A white sneaker\. premium/,
     );
   });
+
+  it('keeps a punctuation-only prompt intact instead of erasing it', () => {
+    expect(buildRequest(input({ userText: '???' })).prompt).toBe('???');
+  });
 });
