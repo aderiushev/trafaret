@@ -140,10 +140,15 @@ type Graph = {
 
 - A zod schema with a discriminated union on `type`. The same JSON is autosaved, exported/imported and posted to
   `/api/runs`. The server ignores `position`.
-- `validateGraph(graph) → Issue[]` is pure and catalog-agnostic. Issue codes: `DUPLICATE_ID`, `DANGLING_EDGE`,
+- `validateGraph(graph) → Issue[]` is pure and catalog-agnostic.
+  Issue codes: `SCHEMA_MISMATCH` (request shape, server only), `DUPLICATE_ID`, `DANGLING_EDGE`,
   `PORT_TYPE_MISMATCH`, `INPUT_ALREADY_CONNECTED`, `CYCLE`, `MISSING_INPUT`, `MISSING_VALUE`, `NOTHING_TO_RUN`,
   `LIMIT_EXCEEDED`. The server adds `UNKNOWN_MODEL`, `MODEL_UNAVAILABLE`, `MODEL_CANNOT_EDIT`, `UNKNOWN_PRESET`,
   `UNKNOWN_ASSET`.
+- `validateGraph` replays every edge through `canConnect` against the edges accepted so far — one wiring rule for
+  canvas and server — so a rejected edge (for example the one that would close a loop) is reported with its `edgeId`
+  and target `nodeId`. A graph over the node or edge limit returns only its size issues: the per-edge replay is
+  skipped so validation stays cheap for any input.
 - `Issue = { code, message, nodeId?, edgeId? }`.
 - Limits: ≤ 30 nodes, ≤ 60 edges, ≤ 8 AI nodes (`generateImage` + `editImage`), prompt/instruction ≤ 2 000 chars.
 
@@ -300,6 +305,7 @@ JSON bodies are validated with zod schemas from `core`; the same schemas generat
 | GET    | `/api/health`                           | `200 { ok: true }`                                                                          |
 | GET    | `/api/catalog`                          | `200 { models: ImageModel[] }`                                                              |
 | GET    | `/api/presets`                          | `200 { presets: Preset[] }` with references as URLs                                         |
+| GET    | `/api/samples`                          | `200 { samples: Sample[] }` — pinned sample photos for the Edit templates                   |
 | POST   | `/api/assets`                           | multipart `file` → `201 { assetId, url, width, height }`                                    |
 | GET    | `/api/assets/:assetId`                  | image bytes, `Cache-Control: public, max-age=31536000, immutable`                           |
 | POST   | `/api/runs`                             | `{ graph }` → `202 { runId }` · `400 { error: { code: 'INVALID_GRAPH', message, issues } }` |

@@ -1,0 +1,7 @@
+{
+  "id": "lifestyle",
+  "name": "Lifestyle",
+  "mainPrompt": "natural daylight lifestyle photo, warm tones, shallow depth of field, real home setting",
+  "negativePrompt": "studio backdrop, artificial look, oversaturated colors",
+  "references": ["/references/lifestyle-1.webp", "/references/lifestyle-2.webp"]
+}

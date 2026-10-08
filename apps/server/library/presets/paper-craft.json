@@ -1,0 +1,7 @@
+{
+  "id": "paper-craft",
+  "name": "Paper Craft",
+  "mainPrompt": "handmade paper-craft diorama, layered cut paper, soft shadows, playful colors",
+  "negativePrompt": "photorealistic, glossy plastic, metal",
+  "references": ["/references/paper-craft-1.webp", "/references/paper-craft-2.webp"]
+}

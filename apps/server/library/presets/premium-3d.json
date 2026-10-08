@@ -1,0 +1,7 @@
+{
+  "id": "premium-3d",
+  "name": "Premium 3D",
+  "mainPrompt": "premium minimal 3D render, soft studio lighting, matte materials, gentle shadows, clean pastel backdrop",
+  "negativePrompt": "clutter, noisy background, text, watermark, low detail",
+  "references": ["/references/premium-3d-1.webp", "/references/premium-3d-2.webp"]
+}
