@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { fitWithin } from '../assets/image.ts';
-import { postToProvider, readJson } from './http.ts';
+import { postToProvider, readJson, unexpectedResponse } from './http.ts';
 import { ProviderError, type ImageProvider, type ProviderImage } from './types.ts';
 
 const MAX_INPUT_IMAGES = 4;
@@ -37,14 +37,7 @@ export function createCloudflareProvider(options: CloudflareProviderOptions): Im
         signal,
       });
       const parsed = responseSchema.safeParse(await readJson(response));
-      if (!parsed.success) {
-        throw new ProviderError(
-          'PROVIDER_ERROR',
-          'The AI service returned an unexpected response. Retry in a few seconds.',
-          true,
-          JSON.stringify(parsed.error.issues).slice(0, 500),
-        );
-      }
+      if (!parsed.success) throw unexpectedResponse(JSON.stringify(parsed.error.issues).slice(0, 500));
       return { bytes: Buffer.from(parsed.data.result.image, 'base64') };
     },
   };

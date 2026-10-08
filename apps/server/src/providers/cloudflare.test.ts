@@ -39,6 +39,8 @@ describe('Cloudflare provider', () => {
       'https://api.cloudflare.com/client/v4/accounts/acc-1/ai/run/@cf/black-forest-labs/flux-2-klein-4b',
     );
     expect(new Headers(call.init.headers).get('authorization')).toBe('Bearer tok-1');
+    // fetch derives the multipart content-type, including its boundary, from the FormData body.
+    expect(new Headers(call.init.headers).has('content-type')).toBe(false);
     expect(call.init.signal).toBe(signal);
     const form = call.init.body as FormData;
     expect(form.get('prompt')).toBe('A white sneaker');
@@ -100,6 +102,7 @@ describe('Cloudflare provider', () => {
     const provider = createCloudflareProvider({ accountId: 'acc', apiToken: 'tok', fetch });
     await expect(provider.generate(baseRequest(), new AbortController().signal)).rejects.toMatchObject({
       code: 'PROVIDER_ERROR',
+      retryable: true,
     });
   });
 

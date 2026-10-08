@@ -6,6 +6,15 @@ const UNAVAILABLE = "The AI service didn't respond. Retry in a few seconds.";
 export const isAbortError = (error: unknown): boolean =>
   error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError');
 
+/** A reply the adapter cannot use: an unreadable body or one that is not the expected image payload. */
+export const unexpectedResponse = (detail?: string): ProviderError =>
+  new ProviderError(
+    'PROVIDER_ERROR',
+    'The AI service returned an unexpected response. Retry in a few seconds.',
+    true,
+    detail,
+  );
+
 /** POSTs to a provider and turns transport and HTTP failures into ProviderError. Abort errors pass through. */
 export async function postToProvider(
   fetchFn: typeof fetch,
@@ -34,12 +43,7 @@ export async function readJson(response: Response): Promise<unknown> {
     return await response.json();
   } catch (error) {
     if (isAbortError(error)) throw error;
-    throw new ProviderError(
-      'PROVIDER_ERROR',
-      'The AI service returned an unexpected response. Retry in a few seconds.',
-      true,
-      error instanceof Error ? error.message : 'unreadable response body',
-    );
+    throw unexpectedResponse(error instanceof Error ? error.message : 'unreadable response body');
   }
 }
 
