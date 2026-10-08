@@ -19,5 +19,8 @@
     "pino": "^10.4.0",
     "sharp": "^0.35.5",
     "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "form-data": "^4.0.6"
   }
 }
