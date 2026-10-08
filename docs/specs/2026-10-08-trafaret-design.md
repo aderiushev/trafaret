@@ -158,7 +158,7 @@ type Graph = {
 type Preset = { id: string; name: string; mainPrompt: string; negativePrompt: string; references: string[] };
 ```
 
-- Stored as `apps/server/presets/<id>.json` in exactly this shape, `references` relative to the presets folder
+- Stored as `apps/server/library/presets/<id>.json` in exactly this shape, `references` relative to the presets folder
   (e.g. `/references/premium-3d-1.webp`), validated at boot.
 - `GET /api/presets` returns `references` resolved to asset URLs. Nodes store only `presetId`; the server resolves
   the content at run time, so the merge never happens in the UI.
@@ -382,7 +382,7 @@ Raw provider errors are logged on the server only.
   preset references and the sample photo — are never evicted.
 - Uploads: `@fastify/multipart`, ≤ 10 MB, format checked from the bytes with sharp (PNG/JPEG/WebP only),
   ≤ 4096×4096, stored as uploaded.
-- A sample product photo is pinned at boot for the Edit templates.
+- A sample product photo, kept in `apps/server/library/samples/`, is pinned at boot for the Edit templates.
 
 ### 7.6 Live-demo guards
 

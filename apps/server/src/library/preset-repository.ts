@@ -16,6 +16,12 @@ const presetFileSchema = presetSchema.extend({
 
 export type ResolvedPreset = { preset: Preset; referenceAssetIds: string[]; contentHash: string };
 
+/** A preset that cannot be loaded is reported with its file name, so a bad boot points straight at the fix. */
+const invalidPreset = (file: string, reason: string, options?: ErrorOptions): Error =>
+  new Error(`Invalid preset ${file}: ${reason}`, options);
+
+const reasonOf = (cause: unknown): string => (cause instanceof Error ? cause.message : String(cause));
+
 /** Presets are files on the server: the UI only ever stores a preset id, never the merge logic. */
 export class PresetRepository {
   private readonly byId: ReadonlyMap<string, ResolvedPreset>;
@@ -28,12 +34,19 @@ export class PresetRepository {
     const files = (await readdir(dir)).filter((name) => name.endsWith('.json')).sort();
     const presets: ResolvedPreset[] = [];
     for (const file of files) {
-      const parsed = presetFileSchema.safeParse(JSON.parse(await readFile(join(dir, file), 'utf8')));
+      const text = await readFile(join(dir, file), 'utf8');
+      let json: unknown;
+      try {
+        json = JSON.parse(text);
+      } catch (cause) {
+        throw invalidPreset(file, `not valid JSON (${reasonOf(cause)})`, { cause });
+      }
+      const parsed = presetFileSchema.safeParse(json);
       if (!parsed.success) {
         const details = parsed.error.issues
           .map((issue) => `${issue.path.join('.')} ${issue.message}`)
           .join('; ');
-        throw new Error(`Invalid preset ${file}: ${details}`);
+        throw invalidPreset(file, details);
       }
       const preset = parsed.data;
       if (presets.some((entry) => entry.preset.id === preset.id)) {
@@ -41,8 +54,14 @@ export class PresetRepository {
       }
       const referenceAssetIds: string[] = [];
       for (const reference of preset.references) {
-        const asset = await assets.put(await readFile(join(dir, reference)), { pinned: true });
-        referenceAssetIds.push(asset.id);
+        try {
+          const asset = await assets.put(await readFile(join(dir, reference)), { pinned: true });
+          referenceAssetIds.push(asset.id);
+        } catch (cause) {
+          throw invalidPreset(file, `reference ${reference} could not be loaded: ${reasonOf(cause)}`, {
+            cause,
+          });
+        }
       }
       const contentHash = sha256Hex(canonicalJson({ ...preset, references: referenceAssetIds }));
       presets.push({ preset, referenceAssetIds, contentHash });

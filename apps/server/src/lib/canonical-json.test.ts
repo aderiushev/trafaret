@@ -15,4 +15,9 @@ describe('canonicalJson', () => {
   it('drops undefined properties', () => {
     expect(canonicalJson({ a: undefined, b: null })).toBe('{"b":null}');
   });
+
+  it('keeps array order, since it is significant', () => {
+    expect(canonicalJson([2, 1])).toBe('[2,1]');
+    expect(canonicalJson([2, 1])).not.toBe(canonicalJson([1, 2]));
+  });
 });

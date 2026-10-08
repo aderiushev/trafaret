@@ -1,20 +1,37 @@
-import { copyFile, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pino } from 'pino';
-import { describe, expect, it } from 'vitest';
-import { AssetStore } from '../assets/asset-store.ts';
+import { afterAll, describe, expect, it } from 'vitest';
+import { AssetStore, UnsupportedImageError } from '../assets/asset-store.ts';
 import { createHttpServer } from '../http/server.ts';
+import { makePng } from '../test/images.ts';
 import { PresetRepository } from './preset-repository.ts';
 import { registerLibraryRoutes } from './routes.ts';
 import { SampleRepository } from './sample-repository.ts';
 
 const libraryDir = fileURLToPath(new URL('../../library', import.meta.url));
 const referenceFile = join(libraryDir, 'presets', 'references', 'premium-3d-1.webp');
+const sampleFile = join(libraryDir, 'samples', 'sample-product.webp');
+
+const tempDirs: string[] = [];
+
+afterAll(async () => {
+  await Promise.all(tempDirs.map((dir) => rm(dir, { recursive: true, force: true })));
+});
+
+async function tempDir(): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), 'trafaret-library-'));
+  tempDirs.push(dir);
+  return dir;
+}
+
+const loadPresets = (dir: string): Promise<PresetRepository> =>
+  PresetRepository.load(dir, new AssetStore({ maxBytes: 1e8 }));
 
 async function presetDir(mainPrompt: string, file = 'custom.json', body?: unknown): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), 'trafaret-presets-'));
+  const dir = await tempDir();
   await mkdir(join(dir, 'references'));
   await copyFile(referenceFile, join(dir, 'references', 'ref-1.webp'));
   const preset = body ?? {
@@ -82,6 +99,37 @@ describe('PresetRepository', () => {
       /broken\.json/,
     );
   });
+
+  it('names the file and keeps the cause when a preset file is not valid JSON', async () => {
+    const dir = await tempDir();
+    await writeFile(join(dir, 'broken.json'), '{ not json');
+    await expect(loadPresets(dir)).rejects.toMatchObject({
+      message: expect.stringMatching(/^Invalid preset broken\.json: not valid JSON \(.+\)$/),
+      cause: expect.any(SyntaxError),
+    });
+  });
+
+  it('names the file and the reference when a reference image is missing', async () => {
+    const dir = await presetDir('soft light');
+    await rm(join(dir, 'references', 'ref-1.webp'));
+    await expect(loadPresets(dir)).rejects.toMatchObject({
+      message: expect.stringMatching(
+        /^Invalid preset custom\.json: reference \/references\/ref-1\.webp could not be loaded: ENOENT/,
+      ),
+      cause: expect.objectContaining({ code: 'ENOENT' }),
+    });
+  });
+
+  it('names the file and the reference when a reference is not an image', async () => {
+    const dir = await presetDir('soft light');
+    await writeFile(join(dir, 'references', 'ref-1.webp'), 'definitely not an image');
+    await expect(loadPresets(dir)).rejects.toMatchObject({
+      message:
+        'Invalid preset custom.json: reference /references/ref-1.webp could not be loaded: ' +
+        'Only PNG, JPEG and WebP images are supported.',
+      cause: expect.any(UnsupportedImageError),
+    });
+  });
 });
 
 describe('SampleRepository', () => {
@@ -90,6 +138,22 @@ describe('SampleRepository', () => {
     const samples = (await SampleRepository.load(join(libraryDir, 'samples'), assets)).list();
     expect(samples).toHaveLength(1);
     for (const sample of samples) expect(assets.has(sample.assetId)).toBe(true);
+  });
+
+  it('accepts upper-case image extensions', async () => {
+    const dir = await tempDir();
+    await writeFile(join(dir, 'shot.PNG'), await makePng());
+    const samples = await SampleRepository.load(dir, new AssetStore({ maxBytes: 1e8 }));
+    expect(samples.list()).toMatchObject([{ id: 'shot', name: 'Shot' }]);
+  });
+
+  it('rejects two files that map to the same sample id', async () => {
+    const dir = await tempDir();
+    await writeFile(join(dir, 'shot.png'), await makePng());
+    await copyFile(sampleFile, join(dir, 'shot.webp'));
+    await expect(SampleRepository.load(dir, new AssetStore({ maxBytes: 1e8 }))).rejects.toThrow(
+      'Duplicate sample id "shot" (shot.png, shot.webp)',
+    );
   });
 });
 

@@ -20,11 +20,15 @@ export class SampleRepository {
   }
 
   static async load(dir: string, assets: AssetStore): Promise<SampleRepository> {
-    const files = (await readdir(dir)).filter((name) => /\.(?:webp|png|jpe?g)$/.test(name)).sort();
+    const files = (await readdir(dir)).filter((name) => /\.(?:webp|png|jpe?g)$/i.test(name)).sort();
     const samples: SampleEntry[] = [];
+    const fileById = new Map<string, string>();
     for (const file of files) {
-      const asset = await assets.put(await readFile(join(dir, file)), { pinned: true });
       const id = file.replace(/\.[^.]+$/, '');
+      const firstFile = fileById.get(id);
+      if (firstFile !== undefined) throw new Error(`Duplicate sample id "${id}" (${firstFile}, ${file})`);
+      fileById.set(id, file);
+      const asset = await assets.put(await readFile(join(dir, file)), { pinned: true });
       samples.push({ id, name: toName(id), asset });
     }
     return new SampleRepository(samples);
