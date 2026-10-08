@@ -165,17 +165,26 @@ async function storeOutput(bytes: Buffer, assets: AssetStore): Promise<StoredAss
 
 async function withTimeout<T>(timeoutMs: number, call: (signal: AbortSignal) => Promise<T>): Promise<T> {
   const signal = AbortSignal.timeout(timeoutMs);
+  const timedOut = (): JobFailure =>
+    new JobFailure({
+      code: 'TIMEOUT',
+      message: `No answer from the AI service in ${Math.max(1, Math.round(timeoutMs / 1000))} s. Retry to try again.`,
+      retryable: true,
+    });
+  // Race the deadline too: a provider that ignores the signal must not hold the job (and its permit) forever.
+  let onAbort = (): void => undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    onAbort = () => reject(timedOut());
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
   try {
-    return await call(signal);
+    return await Promise.race([call(signal), deadline]);
   } catch (error) {
-    if (signal.aborted) {
-      const seconds = Math.max(1, Math.round(timeoutMs / 1000));
-      throw new JobFailure({
-        code: 'TIMEOUT',
-        message: `No answer from the AI service in ${seconds} s. Retry to try again.`,
-        retryable: true,
-      });
-    }
+    if (signal.aborted) throw timedOut();
     throw error;
+  } finally {
+    // The race only subscribes to `deadline` once `call` returned a promise. Detach it so that a rejection can never
+    // arrive later without a subscriber (e.g. when `call` threw synchronously), which would be an unhandled rejection.
+    signal.removeEventListener('abort', onAbort);
   }
 }

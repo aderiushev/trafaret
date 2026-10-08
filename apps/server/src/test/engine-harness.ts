@@ -26,19 +26,25 @@ export type PendingCall = {
   reject: (error: Error) => void;
 };
 
-/** A provider whose calls stay pending until the test resolves or rejects them. */
+/**
+ * A provider whose calls stay pending until the test resolves or rejects them. By default a call also rejects when
+ * its signal aborts, like a well-behaved provider; with `ignoreAbort` it never reacts to the signal.
+ */
 export class ControlledProvider implements ImageProvider {
   readonly id = 'mock' as const;
   readonly calls: PendingCall[] = [];
   private readonly image: Buffer;
+  private readonly ignoreAbort: boolean;
 
-  constructor(image: Buffer) {
+  constructor(image: Buffer, options: { ignoreAbort?: boolean } = {}) {
     this.image = image;
+    this.ignoreAbort = options.ignoreAbort ?? false;
   }
 
   generate(request: ProviderRequest, signal: AbortSignal): Promise<ProviderResult> {
     return new Promise((resolve, reject) => {
       this.calls.push({ request, signal, resolve: () => resolve({ bytes: this.image }), reject });
+      if (this.ignoreAbort) return;
       signal.addEventListener(
         'abort',
         () => reject(signal.reason instanceof Error ? signal.reason : new Error('aborted')),
@@ -61,11 +67,15 @@ export type HarnessOptions = {
   presets?: ResolvedPreset[];
   /** Use the real (instant) mock provider instead of the controlled one. */
   realMock?: boolean;
+  /** The controlled provider never reacts to the abort signal, like a provider that ignores timeouts. */
+  ignoreAbort?: boolean;
   now?: () => number;
 };
 
 export async function createHarness(options: HarnessOptions = {}) {
-  const provider = new ControlledProvider(await makePng(16, 16));
+  const provider = new ControlledProvider(await makePng(16, 16), {
+    ignoreAbort: options.ignoreAbort ?? false,
+  });
   const assets = new AssetStore({ maxBytes: 64 * 1024 * 1024 });
   const catalog = new ModelCatalog({ cloudflare: null, byteplus: null });
   const presets = new PresetRepository(options.presets ?? []);
