@@ -64,4 +64,36 @@ describe('createHttpServer', () => {
     expect(response.body).not.toContain('secret');
     expect(response.json()).toMatchObject({ error: { code: 'INTERNAL' } });
   });
+
+  it('answers a thrown non-Error with the generic internal error', async () => {
+    const app = await createHttpServer({ logger });
+    app.get('/throws-null', () => {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error -- a non-Error throwable is the case under test
+      throw null;
+    });
+    const response = await app.inject({ method: 'GET', url: '/throws-null' });
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toEqual({
+      error: { code: 'INTERNAL', message: 'Something went wrong on our side. Try again in a moment.' },
+    });
+  });
+
+  it('answers malformed URLs with the error envelope', async () => {
+    const app = await createHttpServer({ logger });
+    const response = await app.inject({ method: 'GET', url: '/api/%zz' });
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      error: { code: 'BAD_REQUEST', message: 'The request URL is invalid.' },
+    });
+  });
+
+  it('answers over-long route parameters with the error envelope', async () => {
+    const app = await createHttpServer({ logger });
+    app.get('/items/:id', () => ({ ok: true }));
+    const response = await app.inject({ method: 'GET', url: `/items/${'x'.repeat(101)}` });
+    expect(response.statusCode).toBe(414);
+    expect(response.json()).toEqual({
+      error: { code: 'URI_TOO_LONG', message: 'The request URL is too long.' },
+    });
+  });
 });

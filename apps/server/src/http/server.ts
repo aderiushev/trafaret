@@ -6,6 +6,7 @@ import Fastify, {
   type FastifyBaseLogger,
   type FastifyError,
   type FastifyInstance,
+  type FastifyReply,
   type FastifyRequest,
 } from 'fastify';
 import {
@@ -33,7 +34,11 @@ export type HttpServerOptions = {
 export async function createHttpServer(options: HttpServerOptions): Promise<FastifyInstance> {
   // Widened so the app keeps the default FastifyInstance type rather than one parameterised by pino's Logger.
   const loggerInstance: FastifyBaseLogger = options.logger;
-  const app = Fastify({ loggerInstance, trustProxy: options.trustProxy ?? false });
+  const app = Fastify({
+    loggerInstance,
+    trustProxy: options.trustProxy ?? false,
+    frameworkErrors: (error, _request, reply) => void sendUrlError(reply, error),
+  });
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
   registerErrorHandling(app);
@@ -68,34 +73,55 @@ export async function createHttpServer(options: HttpServerOptions): Promise<Fast
 
 function registerErrorHandling(app: FastifyInstance): void {
   app.setErrorHandler<FastifyError>((error, request, reply) => {
+    // Typed as an Error, but a route can throw anything — including null, which has no properties to read.
+    if (!(error instanceof Error)) return sendInternalError(request, reply, error);
     if (hasZodFastifySchemaValidationErrors(error)) {
       const issues: Issue[] = error.validation.map((item) => ({
         code: 'SCHEMA_MISMATCH',
         message: `${item.instancePath || 'body'} ${item.message ?? 'is invalid'}`.trim(),
       }));
-      return reply
-        .code(400)
-        .send(errorBody('INVALID_REQUEST', "The request doesn't match the API schema.", issues));
+      return sendError(reply, 400, 'INVALID_REQUEST', "The request doesn't match the API schema.", issues);
     }
     if (error instanceof AppError) {
-      return reply.code(error.statusCode).send(errorBody(error.code, error.message, error.issues));
+      return sendError(reply, error.statusCode, error.code, error.message, error.issues);
     }
     if (error.code === 'FST_REQ_FILE_TOO_LARGE') {
-      return reply.code(413).send(errorBody('FILE_TOO_LARGE', 'Images must be 10 MB or smaller.'));
+      return sendError(reply, 413, 'FILE_TOO_LARGE', 'Images must be 10 MB or smaller.');
     }
     if (error.statusCode === 429) {
-      return reply.code(429).send(errorBody('RATE_LIMITED', 'Too many requests. Try again in a minute.'));
+      return sendError(reply, 429, 'RATE_LIMITED', 'Too many requests. Try again in a minute.');
     }
     const status = error.statusCode ?? 500;
-    if (status >= 400 && status < 500)
-      return reply.code(status).send(errorBody('BAD_REQUEST', error.message));
-    request.log.error({ err: error }, 'unhandled error');
-    return reply
-      .code(500)
-      .send(errorBody('INTERNAL', 'Something went wrong on our side. Try again in a moment.'));
+    if (status >= 400 && status < 500) return sendError(reply, status, 'BAD_REQUEST', error.message);
+    return sendInternalError(request, reply, error);
   });
 
   app.setNotFoundHandler((request, reply) =>
-    reply.code(404).send(errorBody('NOT_FOUND', `Nothing at ${request.method} ${request.url}.`)),
+    sendError(reply, 404, 'NOT_FOUND', `Nothing at ${request.method} ${request.url}.`),
   );
+}
+
+/** Every HTTP error leaves through here, as the one error envelope. */
+function sendError(
+  reply: FastifyReply,
+  statusCode: number,
+  code: string,
+  message: string,
+  issues?: Issue[],
+): FastifyReply {
+  return reply.code(statusCode).send(errorBody(code, message, issues));
+}
+
+/** Logs the cause and answers 500 without any of its details. */
+function sendInternalError(request: FastifyRequest, reply: FastifyReply, cause: unknown): FastifyReply {
+  request.log.error({ err: cause }, 'unhandled error');
+  return sendError(reply, 500, 'INTERNAL', 'Something went wrong on our side. Try again in a moment.');
+}
+
+/** The router rejects a malformed URL or an over-long route parameter before any route or error handler runs. */
+function sendUrlError(reply: FastifyReply, error: FastifyError): FastifyReply {
+  const status = error.statusCode ?? 400;
+  return status === 414
+    ? sendError(reply, 414, 'URI_TOO_LONG', 'The request URL is too long.')
+    : sendError(reply, status, 'BAD_REQUEST', 'The request URL is invalid.');
 }
