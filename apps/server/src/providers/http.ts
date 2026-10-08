@@ -28,6 +28,21 @@ export async function postToProvider(
   return response;
 }
 
+/** Reads a provider's JSON body; a dropped connection or malformed body becomes a retryable ProviderError. Abort errors pass through. */
+export async function readJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch (error) {
+    if (isAbortError(error)) throw error;
+    throw new ProviderError(
+      'PROVIDER_ERROR',
+      'The AI service returned an unexpected response. Retry in a few seconds.',
+      true,
+      error instanceof Error ? error.message : 'unreadable response body',
+    );
+  }
+}
+
 export async function errorFromResponse(response: Response): Promise<ProviderError> {
   const body = await response.text().catch(() => '');
   const detail = `HTTP ${response.status}: ${body.slice(0, 500)}`;

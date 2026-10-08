@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { errorFromResponse, postToProvider } from './http.ts';
+import { errorFromResponse, postToProvider, readJson } from './http.ts';
 
 describe('errorFromResponse', () => {
   it.each([
@@ -50,5 +50,37 @@ describe('postToProvider', () => {
   it('returns successful responses', async () => {
     const ok = (() => Promise.resolve(new Response('{}', { status: 200 }))) as typeof fetch;
     expect((await postToProvider(ok, 'https://ai.example.test', {})).status).toBe(200);
+  });
+});
+
+/** A response whose body stream fails mid-read, like a connection that drops or a signal that aborts. */
+const failingBody = (error: unknown): Response =>
+  new Response(new ReadableStream({ start: (controller) => controller.error(error) }));
+
+describe('readJson', () => {
+  it('parses a JSON body', async () => {
+    expect(await readJson(new Response('{"ok":true}', { status: 200 }))).toEqual({ ok: true });
+  });
+
+  it('turns a malformed body into a retryable error', async () => {
+    await expect(readJson(new Response('not json', { status: 200 }))).rejects.toMatchObject({
+      name: 'ProviderError',
+      code: 'PROVIDER_ERROR',
+      retryable: true,
+    });
+  });
+
+  it('turns a dropped connection into a retryable error', async () => {
+    await expect(readJson(failingBody(new TypeError('terminated')))).rejects.toMatchObject({
+      name: 'ProviderError',
+      code: 'PROVIDER_ERROR',
+      retryable: true,
+      detail: 'terminated',
+    });
+  });
+
+  it('lets abort errors through untouched', async () => {
+    const aborted = failingBody(new DOMException('timed out', 'TimeoutError'));
+    await expect(readJson(aborted)).rejects.toMatchObject({ name: 'TimeoutError' });
   });
 });
