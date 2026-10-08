@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { pino } from 'pino';
 import { describe, expect, it, vi } from 'vitest';
 import type { Run } from '@trafaret/core';
-import { branchingGraph, generateNode, withNode } from '@trafaret/core/testing';
+import { branchingGraph, edge, generateNode, promptNode, withNode } from '@trafaret/core/testing';
 import { createHttpServer } from '../http/server.ts';
 import { createHarness } from '../test/engine-harness.ts';
 import { registerRunRoutes } from './routes.ts';
@@ -39,6 +39,16 @@ describe('runs API', () => {
 
   it('rejects malformed bodies with schema issues', async () => {
     const response = await createRun(await setup(), { nodes: 'nope' });
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ error: { code: 'INVALID_REQUEST' } });
+  });
+
+  it('rejects node ids that could collide with object internals', async () => {
+    const graph = {
+      nodes: [promptNode('prompt'), generateNode('__proto__')],
+      edges: [edge('prompt', '__proto__', 'prompt')],
+    };
+    const response = await createRun(await setup(), graph);
     expect(response.statusCode).toBe(400);
     expect(response.json()).toMatchObject({ error: { code: 'INVALID_REQUEST' } });
   });

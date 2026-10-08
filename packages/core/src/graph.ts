@@ -9,7 +9,12 @@ import {
   type NodeType,
 } from './nodes.ts';
 
-const id = z.string().min(1).max(64);
+/**
+ * The nanoid alphabet, 1–64 characters. Node ids become object keys (e.g. `run.jobs`), so `__proto__` — whose
+ * assignment would hit the prototype setter instead of creating a key — is refused.
+ */
+export const nodeIdSchema = z.string().regex(/^(?!__proto__$)[A-Za-z0-9_-]{1,64}$/);
+const id = nodeIdSchema;
 const position = z.object({ x: z.number(), y: z.number() }).optional();
 
 export const graphNodeSchema = z.discriminatedUnion('type', [
@@ -21,10 +26,11 @@ export const graphNodeSchema = z.discriminatedUnion('type', [
 ]);
 
 export const graphEdgeSchema = z.object({
-  id,
-  source: id,
+  // Edge ids stay loose: they never become object keys, and ids made by the canvas may contain other characters.
+  id: z.string().min(1).max(64),
+  source: nodeIdSchema,
   sourceHandle: z.literal('out'),
-  target: id,
+  target: nodeIdSchema,
   targetHandle: z.enum(INPUT_HANDLES),
 });
 

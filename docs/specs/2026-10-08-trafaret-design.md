@@ -210,7 +210,9 @@ type Job = {
 - A job whose dependency failed becomes `error` with code `UPSTREAM_FAILED` and `upstreamNodeId` — Airflow's
   `upstream_failed` semantics without a sixth status.
 - `version` increments on every change; a client never replaces a snapshot with an older one.
-- IDs: nodes and edges use `nanoid` (client); runs `run_<nanoid>`; assets are the SHA-256 of their bytes (hex).
+- IDs: nodes and edges use `nanoid` (client). A node id matches `[A-Za-z0-9_-]{1,64}` (the nanoid alphabet) and is
+  never `__proto__`, because node ids become object keys; edge ids may be any 1–64 characters. Runs are
+  `run_<nanoid>`; assets are the SHA-256 of their stored bytes (hex).
 
 ## 6. Execution engine (`apps/server/src/engine`)
 
