@@ -493,8 +493,9 @@ edges animated · `success` check · `error` red with message and Retry. For `UP
 
 - **Timeline** (bottom, collapsible): one row per Generate/Edit node in topological order (Prompt, Image Input and
   Result finish in ~0 ms and would only add empty rows); a bar from `startedAt` to `finishedAt` relative to
-  `run.startedAt`; running bars grow live; reused nodes show ⚡ at zero width; failed bars are red with Retry. Summary
-  line: "2 AI calls · 13.4 s · 1 reused · saved ~12.1 s". Plain CSS; the layout maths is a pure, tested function.
+  `run.startedAt`; running bars grow live; reused nodes show ⚡ at zero width; a failed row has a red bar, says
+  "Failed" and offers Retry. Summary line: "2 AI calls · 13.4 s · 1 reused · saved ~12.1 s". Plain CSS; the layout
+  maths is a pure, tested function.
 - **Inspector** (right, for the selected node): status, attempt, duration, model and fallback note, **Request sent to
   AI** (final prompt, negative mode, reference thumbnails with roles, warnings) and error details.
 

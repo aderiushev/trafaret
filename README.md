@@ -41,7 +41,9 @@ One process serves the built editor and the API, as on the live demo:
 
 ```bash
 docker build -t trafaret .
-docker run --rm -p 8080:8080 trafaret    # add --env-file .env for the real models
+docker run --rm -p 8080:8080 trafaret
+# With the real models; -e keeps the image in production mode, which .env would switch off:
+docker run --rm -p 8080:8080 --env-file .env -e NODE_ENV=production trafaret
 ```
 
 Open `http://127.0.0.1:8080`. Without Docker: `pnpm build && pnpm --filter @trafaret/server start`.
