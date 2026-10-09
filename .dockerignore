@@ -1,6 +1,6 @@
 # Never send local secrets, dependencies or build output into the image.
-.env
-.env.*
+**/.env
+**/.env.*
 **/node_modules
 **/dist
 .git
@@ -9,5 +9,5 @@
 coverage
 playwright-report
 test-results
-*.log
+**/*.log
 .DS_Store

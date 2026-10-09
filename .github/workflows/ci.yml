@@ -50,6 +50,9 @@ jobs:
       # The image the demo host deploys must boot and serve both the editor and the API.
       - name: Smoke test
         run: |
-          docker run -d -p 8080:8080 trafaret
-          curl --retry 30 --retry-delay 1 --retry-all-errors -sf http://127.0.0.1:8080/api/health
-          curl -sf http://127.0.0.1:8080/ | grep -q '<div id="root">'
+          docker run -d --name trafaret -p 8080:8080 trafaret
+          curl --retry 30 --retry-delay 1 --retry-all-errors -sSf http://127.0.0.1:8080/api/health
+          curl -sSf http://127.0.0.1:8080/ | grep -q '<div id="root">'
+      - name: Server log
+        if: failure()
+        run: docker logs trafaret
