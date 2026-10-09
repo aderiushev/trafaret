@@ -1838,3 +1838,29 @@ Then Phase 4 covers:
 - Live checks: health, the catalog showing the real models, one real run, and — the identity gate — that forged `cf-connecting-ip` and `X-Forwarded-For` headers do not reset `x-ratelimit-remaining` on `POST /api/runs`.
 - README media: the demo link, a GIF of "change one preset → only one branch re-renders" and screenshots; the keep-warm workflow (it needs the demo URL).
 - The portfolio page `aderiushev.github.io/trafaret/` and card #15 "TF".
+
+## Execution notes
+
+The plan was executed task by task, each task reviewed on its own and the whole branch reviewed at the end. These
+changes came out of the reviews, so the code differs from this plan's blocks in these places:
+
+- Task 1 (`cb64256`): `@fastify/static` is registered with `wildcard: false` — its default catch-all route turned
+  the router's 414 for an over-long id into a 404 — with a test that pins the 414; `sendUrlError` sets the nosniff
+  header itself, because Fastify answers router errors without running the onRequest hook, and `/api/%zz` joined
+  the nosniff test.
+- Task 4 (`3842325`): the mock-mode check first asserts that it sees the Mock model enabled, so a renamed catalog
+  field cannot make it pass without checking anything.
+- Task 5 (`74cea95`): the focusable inspector draws its focus ring inside its edge (`outline-offset: -2px`); its
+  neighbours hid an outer ring.
+- Task 7 (`fbf7e46`, `0ec3add`): the spec says API responses, error envelopes and the editor's files carry nosniff
+  (Node's own low-level replies don't); the README's CI line names the workflow's triggers (pushes to `main`, pull
+  requests); the README's real-models Docker command adds `-e NODE_ENV=production`, because a `.env` copied from
+  `.env.example` would switch the image to development and bind it to 127.0.0.1 inside the container; spec §8.5
+  records that a failed timeline row says "Failed".
+- Final review (`348e324`..`70fb2cc`): a repeated error toast replaces the earlier one, and starting a run clears
+  error toasts (spec §8.7); the CI smoke test names its container, shows curl's errors and prints the server log
+  when it fails; `.dockerignore` keeps env and log files out at any depth; the README diagram says `:runId`; the
+  accessibility scan asserts what each scan covers; a test pins that without the edge header `X-Forwarded-For`
+  never changes the rate-limit key; the mock-mode check's assertions say why they failed.
+- Counts at the end: 381 unit tests (the plan's gates said 371 → 378; each review fix added its tests), and the
+  browser suite reports `5 passed`.
