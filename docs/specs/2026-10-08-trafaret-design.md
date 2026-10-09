@@ -1,7 +1,7 @@
 # Trafaret — Design Spec
 
 - **Date:** 2026-10-08
-- **Status:** Approved in design review; awaiting written-spec review
+- **Status:** Approved; built phase by phase from the plans in `docs/plans/`
 - **Author:** Aleksei Deriushev
 
 ## 1. What it is
@@ -14,15 +14,15 @@ a content-addressed cache.
 
 *Trafaret* (трафарет) means *stencil*: cut it once, use it again and again.
 
-The project answers a take-home brief ("AI Image Workflow Mini", 8–12 h): a small node-based editor plus at least
-one real AI image generation through a backend, testing frontend, backend, AI-API integration and the
-understanding of graph execution. It is also a public portfolio piece.
+The project started as a take-home exercise: a small node-based editor plus at least one real AI image generation
+through a backend, testing frontend, backend, AI-API integration and the understanding of graph execution. It is also
+a public portfolio piece.
 
 ## 2. Goals and non-goals
 
 **Goals**
 
-1. Satisfy every requirement of the brief (traceability in §3).
+1. Satisfy every requirement of the exercise (traceability in §3).
 2. Signature feature: **incremental runs** (build-system semantics), made visible by a **run timeline**.
 3. A live public demo with real AI under a hard daily budget, plus a zero-key local mode.
 4. Code a reviewer enjoys reading: clear boundaries, strict types, tests on the hard parts, documented trade-offs.
@@ -35,7 +35,7 @@ automatic retries of paid calls (deliberate, see §6.5).
 
 ## 3. Requirements traceability
 
-| ID  | Requirement (from the brief)                                                                                                  | Where it is met                                                 |
+| ID  | Requirement (from the exercise)                                                                                               | Where it is met                                                 |
 |-----|-------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------|
 | R1  | Frontend follows Feature-Sliced Design; no business logic in random UI components                                            | §8.1, enforced by Steiger in CI                                 |
 | R2  | Scenario 1: Prompt → Generate Image → Result                                                                                  | Template "Text → Image" (§8.6)                                  |
@@ -67,6 +67,7 @@ trafaret/
 │  └─ core/        shared domain: node types, ports, graph schema, validation, API types
 ├─ e2e/            Playwright specs, run against the server in mock mode
 ├─ docs/           specs/ and plans/
+├─ .github/        CI workflow
 ├─ Dockerfile      one image: Fastify serves the built SPA and /api
 └─ render.yaml     Render blueprint for the live demo
 ```
@@ -394,17 +395,20 @@ Raw provider errors are logged on the server only.
 - Daily caps per real provider, reset at 00:00 UTC: `DAILY_LIMIT_CLOUDFLARE` (80) and `DAILY_LIMIT_BYTEPLUS` (20).
   The counter is checked and incremented right before the provider call. When a cap is reached the job runs on
   Mock with `model.fallbackFrom` set, and the UI labels the result.
-- `@fastify/rate-limit` per IP: runs + retries 20 per 10 min; uploads 30 per 10 min. `trustProxy` in production.
+- `@fastify/rate-limit` per visitor: runs + retries 20 per 10 min; uploads 30 per 10 min. In production a visitor is
+  the address in `cf-connecting-ip`, which Render's Cloudflare edge sets and overwrites. `X-Forwarded-For` is never
+  trusted — Render appends to whatever the client sent — and IPv6 addresses count per /64. A request without the
+  header is keyed by its connecting address.
 - Graph limits from §5.3.
 
 ### 7.7 Configuration
 
 Validated with zod at boot. A missing optional key disables its model with a reason; it never crashes the server.
-A malformed one (spaces or control characters) stops the boot with the variable's name, never its value.
+A malformed one (anything but printable ASCII without spaces) stops the boot with the variable's name, never its value.
 
 | Variable                                          | Default       | Purpose                                                                                                          |
 |---------------------------------------------------|---------------|------------------------------------------------------------------------------------------------------------------|
-| `NODE_ENV`                                        | `development` | `production` turns on `trustProxy` and the production rate limits, keyed by the edge's `cf-connecting-ip` (§7.6) |
+| `NODE_ENV`                                        | `development` | `production` turns on the production rate limits, keyed by the edge's `cf-connecting-ip` (§7.6)                  |
 | `HOST`                                            | `127.0.0.1`   | listen address; `0.0.0.0` when `NODE_ENV=production`; an explicit value always wins                              |
 | `PORT`                                            | 8080          | HTTP port (Render injects its own)                                                                               |
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`   | —             | enable FLUX.2 klein                                                                                              |
@@ -412,14 +416,15 @@ A malformed one (spaces or control characters) stops the boot with the variable'
 | `MAX_CONCURRENT_JOBS`                             | 4             | global provider slots                                                                                            |
 | `JOB_TIMEOUT_MS`                                  | 120000        | per-call timeout                                                                                                 |
 | `DAILY_LIMIT_CLOUDFLARE` / `DAILY_LIMIT_BYTEPLUS` | 80 / 20       | demo budget                                                                                                      |
-| `MOCK_LATENCY_MS`                                 | `1200-3500`   | mock latency range (tests use `0-20`)                                                                            |
+| `MOCK_LATENCY_MS`                                 | `1200-3500`   | mock latency range (server tests use a few ms, e2e `800-1200`)                                                   |
 | `LOG_LEVEL`                                       | `info`        | pino log level                                                                                                   |
 
 ### 7.8 Security
 
 - Provider keys exist only in the server environment; no endpoint returns them; pino redacts `authorization`
   headers and key fields.
-- The SPA and API share an origin: no CORS in production, a Vite proxy in development.
+- The SPA and API share an origin: no CORS in production, a Vite proxy in development. API responses, error
+  envelopes and the editor's files carry `X-Content-Type-Options: nosniff`.
 - Uploads are verified by content, size and dimensions; asset IDs are hashes, so no user input reaches a file path.
 
 ## 8. Frontend (`apps/web`, Feature-Sliced Design)
@@ -513,8 +518,9 @@ one assigns fresh node IDs and seeds.
 - Stencil typeface (Saira Stencil One, self-hosted with Fontsource) for the logotype; Inter for the UI; JetBrains Mono
   for numbers and the timeline.
 - UI copy in English: terse, imperative; error messages say how to recover.
-- Visible focus states, labelled icon buttons, `prefers-reduced-motion` respected. Desktop-first; on narrow
-  screens the canvas stays viewable and runnable.
+- Visible focus states, labelled icon buttons, `prefers-reduced-motion` respected (a running card keeps a still
+  ring). Error toasts stay until dismissed; the timeline announces lost contact. Desktop-first; on narrow screens the
+  canvas stays viewable and runnable.
 - Hints use the native `title` attribute; there is no tooltip component.
 
 ## 9. Testing
@@ -527,7 +533,7 @@ one assigns fresh node IDs and seeds.
 | Provider unit (stubbed `fetch`)                                   | request shape per adapter; the error-mapping table (§7.4); abort                                                                                                                                                                              |
 | API (Fastify `inject`)                                            | 202 / 400 with node IDs / 404 / 409; upload type and size rejection; OpenAPI document served                                                                                                                                                  |
 | Web unit                                                          | store ↔ graph mapping and saving; timeline layout maths; status helpers; wiring checks; templates (fresh ids and seeds, all valid); workflow files; the UI kit and key components with Testing Library, including the canvas rendered in jsdom |
-| E2E (Playwright, server in mock mode)                             | ① template 3 → Run → both results appear and the timeline bars overlap; ② "fails first attempt" model → error → Retry → success; ③ change only Generate B's preset → Run → A shows ⚡ reused — on its own ports (API 8090, editor 5174) with every provider key blanked |
+| E2E (Playwright, server in mock mode)                             | ① template 3 → Run → both results appear and the timeline bars overlap; ② "fails first attempt" model → error → Retry → success; ③ change only Generate B's preset → Run → A shows ⚡ reused; ④ axe finds no WCAG 2.2 A/AA or best-practice problems in the idle editor, after a run and with a failed node. All on their own ports (API 8090, editor 5174) with every provider key blanked; a setup check stops the suite if the server offers any real model |
 
 The engine and `core` are written test-first.
 
@@ -539,16 +545,18 @@ The engine and `core` are written test-first.
 - TypeScript strict with `noUncheckedIndexedAccess`; `.env.example` documents every variable; the Node version is
   pinned via `.nvmrc` and `engines`.
 - GitHub Actions on push and pull request: install (pnpm cache) → lint → typecheck → test → build → e2e (Chromium,
-  mock mode, no secrets).
+  mock mode, no secrets); a second job builds the Docker image and smoke-tests it (health check, editor).
 
 ## 11. Deployment and live demo
 
 - Multi-stage Dockerfile → `node:24-slim`, production dependencies only, non-root user. Fastify serves
-  `apps/web/dist` and `/api`; `GET /api/health` is the health check.
+  `apps/web/dist` and `/api`; `GET /api/health` is the health check. The server's TypeScript runs as is (type
+  stripping); its dependencies keep pnpm's workspace layout, because Node refuses to strip types inside
+  `node_modules`. The runtime image adds fontconfig and DejaVu fonts for the Mock model's text.
 - **Render free web service**, region Frankfurt, Docker runtime, defined in `render.yaml` (blueprint):
-  `healthCheckPath: /api/health`, auto-deploy on every push to `main`, provider keys as dashboard secrets
-  (`sync: false`). Render runs exactly one instance, which the in-memory design requires, and does not throttle
-  background work between requests.
+  `healthCheckPath: /api/health`, auto-deploy of every push to `main` once its CI checks pass
+  (`autoDeployTrigger: checksPass`), provider keys as dashboard secrets (`sync: false`). Render runs exactly one
+  instance, which the in-memory design requires, and does not throttle background work between requests.
 - Free-tier constraints, accepted: the service sleeps after 15 idle minutes and the next visitor waits ~1 minute
   (Render shows a loading page); 512 MB RAM (hence the 150 MB asset cap and WebP outputs); 750 instance hours and
   5 GB bandwidth per month; in-memory state is lost on restart or sleep.
@@ -579,4 +587,4 @@ The engine and `core` are written test-first.
 | 512 MB RAM on the demo host                            | 150 MB asset cap, WebP outputs, ≤ 8 AI nodes per run, 4 concurrent provider calls                 |
 | In-memory state lost on restart or sleep               | Documented; runs are short-lived; the cache warms up again                                        |
 | Demo host unreachable from some networks               | README video + zero-key local mode                                                                |
-| Scope creep beyond the 8–12 h brief                    | Non-goals list; the signature feature is limited to cache + timeline                              |
+| Scope creep                                            | Non-goals list; the signature feature is limited to cache + timeline                              |
