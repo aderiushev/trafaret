@@ -7338,3 +7338,21 @@ git commit -m "docs: record the editor's design decisions in the spec and README
 
 - **Spec coverage.** §8.1 layers and Steiger → Tasks 2–12 (`pnpm lint` runs Steiger). §8.2 store, persistence, polling with the version guard, active run, edited marker, validation before submit → Tasks 4, 6, 9, 11. §8.3 palette at the viewport centre, move, box/shift selection, Delete, ⌘/Ctrl+Enter, Esc, typed handles, compatible-handle highlight, rejection reason, fan-out, minimap, zoom, fit, snap, empty state → Tasks 8, 9, 10, 11. §8.4 cards and statuses → Tasks 7, 11. §8.5 timeline and inspector → Tasks 6, 12. §8.6 templates and first visit → Task 10. §8.7 visual identity and accessibility → Tasks 2, 3, 7, 11, 12. §9 web unit and e2e → every task, Task 13. §10 scripts → Tasks 2, 13. R1, R2–R5, R10, R14 (UI side), R15 → covered through the tasks above.
 - **Out of scope here** (Phase 3): serving the built SPA from Fastify, the Dockerfile, CI, the Render deploy, real preset images and sample photo, the full README.
+
+## Execution notes
+
+The tasks were executed one by one, each followed by a review. Review fixes changed the code in these places, so
+the plan's code blocks differ from what was committed:
+
+- Task 4: `connect` gives every new edge its own nanoid id — React Flow's default id joins both node ids and can
+  pass the 64-character edge-id limit for imported graphs (e51e487). `needsStarter` starts `true` and is cleared
+  when a save loads, so corrupt or unreadable storage also gets the starter (8b5a083).
+- Task 7: selection is an outline, since the status colours own the border; cards carry `data-selected`; the
+  keyboard focus ring that React Flow removes from nodes is restored in `global.css` (641d019).
+- Task 8: `useHandleCompatibility` computes its verdict inside a workflow-store selector — the React Compiler had
+  cached it across drags — and `isSameHandle` stops the wire judging its own start handle (780dc2f).
+- Task 10: `useStarterWorkflow`'s comment covers unreadable saves too (96ae4cb).
+- Task 11: Retry and Download sit in `nodrag` areas, so a click with a little pointer movement isn't taken for a
+  node drag (1e9991c).
+- Task 13: the branching scenario requires real overlap — more than half the shorter bar — and pins
+  `MAX_CONCURRENT_JOBS` (0d19fe8).

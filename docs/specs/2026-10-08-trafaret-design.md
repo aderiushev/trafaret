@@ -428,15 +428,17 @@ A malformed one (spaces or control characters) stops the boot with the variable'
 
 ```
 src/
-├─ app/        providers (QueryClient), design tokens, global styles, error boundary
-├─ pages/      editor/ — layout only
+├─ app/        entrypoint/ (main, providers: QueryClient, React Flow, toasts, error boundary) · styles/ (tokens, global)
+├─ pages/      editor/ — layout, plus the page-level run polling and first-visit starter
 ├─ widgets/    workflow-canvas/ (React Flow + node cards) · editor-toolbar/ · run-timeline/ · node-inspector/
 ├─ features/   add-node · connect-nodes · delete-selection · run-workflow · retry-node · regenerate-node ·
 │              upload-image · load-template · export-import
-├─ entities/   workflow (graph store) · run · preset · model · asset · node (NodeShell, typed handles)
-└─ shared/     api (ky, ApiError) · ui (Button, Select, Textarea, Badge, Spinner, Tooltip, Dropzone, Panel) · lib · config
+├─ entities/   workflow (graph store) · run · preset · catalog (image models) · asset · node (NodeShell, typed handles)
+└─ shared/     api (ky, ApiError) · ui (Button, Select, Textarea, Field, Badge, Spinner, Panel, Dropzone, toasts, ErrorBoundary) · lib
 ```
 
+- The image-model entity is `catalog`, after `GET /api/catalog`: an entity called `model` would read
+  `entities/model/model/` and clash with FSD's `model` segment.
 - Imports flow downward only; every slice exposes an `index.ts`; slices of one layer never import each other.
   Steiger runs in `pnpm lint` and in CI.
 - Node cards compose entities and features, so they live in `widgets/workflow-canvas/ui/nodes/` and contain layout
@@ -448,9 +450,12 @@ src/
   (`trafaret:graph:v1`). React Flow is fully controlled by it.
 - **Server state:** TanStack Query — catalog and presets (`staleTime: Infinity`); run polling (`refetchInterval`
   700 ms until a terminal status; a lower `version` never replaces a higher one); mutations for run, retry, upload.
+  Exactly one component (the editor page) polls; every other reader uses the cached run and never fetches.
 - **Active run:** `activeRunId` plus the submitted graph snapshot in `entities/run`. Nodes whose data differ from
   the snapshot show "● edited". Run and 🎲 are disabled while the active run is not terminal; Retry stays available
   on failed nodes.
+- An export is exactly the body of `POST /api/runs` (`{ "graph": … }`), so it can be posted with curl; import also
+  accepts a bare graph.
 - Before submitting, the client runs `validateGraph`; issues (client- or server-side) are shown on the affected
   nodes, plus a toast ("Fix 2 issues to run").
 
@@ -460,8 +465,8 @@ src/
   overlap.
 - Drag to move; box-select and shift-click; Delete/Backspace removes the selection; ⌘/Ctrl+Enter runs; Esc clears
   the selection.
-- Handles are coloured by port type; while dragging, only compatible handles highlight; a rejected connection shows
-  the reason from `canConnect`.
+- Handles and wires are coloured by port type; while dragging, only compatible handles highlight; a rejected
+  connection shows the reason from `canConnect`.
 - Any output can fan out (branching). Minimap, zoom controls, fit view, snap-to-grid.
 - An empty canvas shows "Start from a template or add a node" with template buttons.
 
@@ -470,8 +475,8 @@ src/
 | Card           | Content                                                                                                                                       |
 |----------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
 | Prompt         | auto-growing textarea, character count                                                                                                        |
-| Image Input    | dropzone / click to upload, preview, replace; upload progress and error                                                                       |
-| Generate Image | model select (disabled options show their reason), preset select with reference thumbnails, aspect ratio (from model capabilities), seed + 🎲, output thumbnail |
+| Image Input    | dropzone / click to upload, preview, replace, “Use the sample photo”; a spinner while uploading (`fetch` reports upload progress only over HTTP/2 with request streams) and the upload error |
+| Generate Image | model select (disabled options show their reason in the option text), preset select with reference thumbnails, aspect ratio (from model capabilities), seed + 🎲, output thumbnail |
 | Edit Image     | instruction (disabled, "Using connected prompt", when a prompt is wired), model (edit-capable only), preset, seed + 🎲, output thumbnail         |
 | Result         | large preview, download, ⚡ reused / Mock badges; error message + Retry                                                                         |
 
@@ -481,10 +486,10 @@ edges animated · `success` check · `error` red with message and Retry. For `UP
 
 ### 8.5 Run timeline and inspector
 
-- **Timeline** (bottom, collapsible): one row per node in topological order; a bar from `startedAt` to `finishedAt`
-  relative to `run.startedAt`; running bars grow live; reused nodes show ⚡ at zero width; failed bars are red with
-  Retry. Summary line: "2 AI calls · 13.4 s · 1 reused · saved ~12 s". Plain CSS; the layout maths is a pure,
-  tested function.
+- **Timeline** (bottom, collapsible): one row per Generate/Edit node in topological order (Prompt, Image Input and
+  Result finish in ~0 ms and would only add empty rows); a bar from `startedAt` to `finishedAt` relative to
+  `run.startedAt`; running bars grow live; reused nodes show ⚡ at zero width; failed bars are red with Retry. Summary
+  line: "2 AI calls · 13.4 s · 1 reused · saved ~12.1 s". Plain CSS; the layout maths is a pure, tested function.
 - **Inspector** (right, for the selected node): status, attempt, duration, model and fallback note, **Request sent to
   AI** (final prompt, negative mode, reference thumbnails with roles, warnings) and error details.
 
@@ -496,7 +501,8 @@ edges animated · `success` check · `error` red with message and Retry. For `UP
 4. **Product shot → two styles** — Image Input (sample photo) → Edit (clean background) → Edit A (Premium 3D) /
    Edit B (Paper Craft) → Result A / Result B
 
-A first visit loads template 3. Templates are graph JSON; loading one assigns fresh node IDs and seeds.
+A first visit — or a visit whose saved workflow can't be loaded — loads template 3. Templates are graph JSON; loading
+one assigns fresh node IDs and seeds.
 
 ### 8.7 Visual identity (defaults, refined in a design pass during implementation)
 
@@ -504,10 +510,12 @@ A first visit loads template 3. Templates are graph JSON; loading one assigns fr
   `#ececef`, muted `#9a9ca5`.
 - One "spray orange" accent `#ff5f1f` for primary actions and the running state; port colours: text `#f5c84c`,
   image `#4cb8ff`; success `#3ad69a`; error `#ff5a5f`.
-- Stencil typeface for the logotype; Inter for the UI; JetBrains Mono for numbers and the timeline.
+- Stencil typeface (Saira Stencil One, self-hosted with Fontsource) for the logotype; Inter for the UI; JetBrains Mono
+  for numbers and the timeline.
 - UI copy in English: terse, imperative; error messages say how to recover.
 - Visible focus states, labelled icon buttons, `prefers-reduced-motion` respected. Desktop-first; on narrow
   screens the canvas stays viewable and runnable.
+- Hints use the native `title` attribute; there is no tooltip component.
 
 ## 9. Testing
 
@@ -518,15 +526,16 @@ A first visit loads template 3. Templates are graph JSON; loading one assigns fr
 | Request builder unit                                              | prompt merge; native vs folded negative prompt; reference order, truncation and warnings                                                                                                                                                       |
 | Provider unit (stubbed `fetch`)                                   | request shape per adapter; the error-mapping table (§7.4); abort                                                                                                                                                                              |
 | API (Fastify `inject`)                                            | 202 / 400 with node IDs / 404 / 409; upload type and size rejection; OpenAPI document served                                                                                                                                                  |
-| Web unit                                                          | store ↔ graph mapping; timeline layout maths; status helpers                                                                                                                                                                                  |
-| E2E (Playwright, server in mock mode)                             | ① template 3 → Run → both results appear and the timeline bars overlap; ② "fails first attempt" model → error → Retry → success; ③ change only Generate B's preset → Run → A shows ⚡ reused                                                     |
+| Web unit                                                          | store ↔ graph mapping and saving; timeline layout maths; status helpers; wiring checks; templates (fresh ids and seeds, all valid); workflow files; the UI kit and key components with Testing Library, including the canvas rendered in jsdom |
+| E2E (Playwright, server in mock mode)                             | ① template 3 → Run → both results appear and the timeline bars overlap; ② "fails first attempt" model → error → Retry → success; ③ change only Generate B's preset → Run → A shows ⚡ reused — on its own ports (API 8090, editor 5174) with every provider key blanked |
 
 The engine and `core` are written test-first.
 
 ## 10. Tooling and CI
 
-- Root scripts: `dev` (server + Vite with an `/api` proxy; mock models always available, real ones when `.env` has
-  keys), `build`, `test`, `e2e`, `lint` (ESLint + Steiger + Prettier check), `typecheck`.
+- Root scripts: `dev` (server + Vite via `pnpm -r --parallel dev`; the editor on `127.0.0.1:5173` proxies `/api` to the
+  server; mock models always available, real ones when `.env` has keys), `build`, `test`, `e2e`, `lint` (ESLint +
+  Steiger + Prettier check), `typecheck`.
 - TypeScript strict with `noUncheckedIndexedAccess`; `.env.example` documents every variable; the Node version is
   pinned via `.nvmrc` and `engines`.
 - GitHub Actions on push and pull request: install (pnpm cache) → lint → typecheck → test → build → e2e (Chromium,
