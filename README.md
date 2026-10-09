@@ -9,6 +9,11 @@ comes from a content-addressed cache, and a timeline shows it.
 
 _Trafaret_ (трафарет) is Russian for _stencil_: cut it once, use it again and again.
 
+**[Open the live demo →](https://trafaret.onrender.com)** It runs FLUX.2 klein and Seedream 4.5 within small daily
+caps, on a free instance: the first visit after a quiet spell takes about a minute to wake it up.
+
+![The editor: one prompt rendered by two Seedream 4.5 branches, a photo edited into a new scene, and a timeline that shows the two branches reused from the cache](docs/media/editor.webp)
+
 ## Run it locally — no keys needed
 
 You need Node 24 and pnpm 10 (`corepack enable` picks the pnpm version pinned in `package.json`).
@@ -134,7 +139,8 @@ curl -s -X POST localhost:8080/api/runs -H 'content-type: application/json' -d @
 curl -s localhost:8080/api/runs/<runId>
 ```
 
-The interactive API reference is at `http://localhost:8080/api/docs`.
+The interactive API reference is at `http://localhost:8080/api/docs`, and the demo's at
+[trafaret.onrender.com/api/docs](https://trafaret.onrender.com/api/docs).
 
 ## Not done yet
 
