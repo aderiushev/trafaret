@@ -1,8 +1,9 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import type { Logger } from 'pino';
 import { registerAssetRoutes } from './assets/routes.ts';
 import { registerCatalogRoutes } from './catalog/routes.ts';
 import type { Config } from './config.ts';
+import { edgeClientKey } from './http/client-key.ts';
 import { createHttpServer } from './http/server.ts';
 import { registerWebApp } from './http/web-app.ts';
 import { registerLibraryRoutes } from './library/routes.ts';
@@ -15,12 +16,6 @@ export type AppOptions = {
   webRoot?: string;
 };
 
-/** Behind the demo host's edge, the visitor's address arrives in cf-connecting-ip. */
-const clientKey = (request: FastifyRequest): string => {
-  const header = request.headers['cf-connecting-ip'];
-  return typeof header === 'string' && header !== '' ? header : request.ip;
-};
-
 export async function buildApp(
   config: Config,
   services: Services,
@@ -28,11 +23,7 @@ export async function buildApp(
   options: AppOptions = {},
 ): Promise<FastifyInstance> {
   const production = config.env === 'production';
-  const app = await createHttpServer({
-    logger,
-    trustProxy: production,
-    ...(production ? { rateLimitKey: clientKey } : {}),
-  });
+  const app = await createHttpServer({ logger, ...(production ? { rateLimitKey: edgeClientKey } : {}) });
   const limits =
     options.rateLimits ??
     (production

@@ -59,4 +59,21 @@ describe('app', { timeout: RENDER_TEST_TIMEOUT_MS }, () => {
       ]),
     );
   });
+
+  it('in production, counts requests per visitor address from the edge, whatever X-Forwarded-For says', async () => {
+    const config = loadConfig({ NODE_ENV: 'production', MOCK_LATENCY_MS: '0-5' });
+    const logger = pino({ level: 'silent' });
+    const app = await buildApp(config, await createServices(config, logger), logger, {
+      rateLimits: { runsPer10Minutes: 2, uploadsPer10Minutes: 2 },
+    });
+    // An empty body fails validation, but the limiter has counted the request by then.
+    const startRun = (headers: Record<string, string>) =>
+      app.inject({ method: 'POST', url: '/api/runs', payload: {}, headers });
+
+    const visitor = { 'cf-connecting-ip': '203.0.113.7' };
+    expect((await startRun({ ...visitor, 'x-forwarded-for': '198.51.100.1' })).statusCode).toBe(400);
+    expect((await startRun({ ...visitor, 'x-forwarded-for': '198.51.100.2' })).statusCode).toBe(400);
+    expect((await startRun({ ...visitor, 'x-forwarded-for': '198.51.100.3' })).statusCode).toBe(429);
+    expect((await startRun({ 'cf-connecting-ip': '203.0.113.8' })).statusCode).toBe(400);
+  });
 });

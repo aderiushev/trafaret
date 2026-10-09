@@ -23,8 +23,7 @@ import { AppError, errorBody } from './errors.ts';
 
 export type HttpServerOptions = {
   logger: Logger;
-  trustProxy?: boolean;
-  /** Identifies a client for rate limiting; defaults to the request IP. */
+  /** Identifies a client for rate limiting; defaults to the connecting address. */
   rateLimitKey?: (request: FastifyRequest) => string;
 };
 
@@ -34,7 +33,6 @@ export async function createHttpServer(options: HttpServerOptions): Promise<Fast
   const loggerInstance: FastifyBaseLogger = options.logger;
   const app = Fastify({
     loggerInstance,
-    trustProxy: options.trustProxy ?? false,
     frameworkErrors: (error, _request, reply) => void sendUrlError(reply, error),
   });
   // Browsers must take every response, uploaded images included, as the type it declares.
