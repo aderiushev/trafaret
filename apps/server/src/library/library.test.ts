@@ -1,4 +1,4 @@
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -44,6 +44,16 @@ async function presetDir(mainPrompt: string, file = 'custom.json', body?: unknow
   await writeFile(join(dir, file), JSON.stringify(preset));
   return dir;
 }
+
+describe('the library', () => {
+  it('keeps every image at or under 200 KB', async () => {
+    for (const dir of [join(libraryDir, 'presets', 'references'), join(libraryDir, 'samples')]) {
+      for (const name of await readdir(dir)) {
+        expect((await stat(join(dir, name))).size, name).toBeLessThanOrEqual(200 * 1024);
+      }
+    }
+  });
+});
 
 describe('PresetRepository', () => {
   it('loads every preset file and pins its reference images', async () => {
@@ -172,7 +182,7 @@ describe('library routes', () => {
 
     const samples = await app.inject({ method: 'GET', url: '/api/samples' });
     expect(samples.json()).toMatchObject({
-      samples: [{ id: 'sample-product', name: 'Sample product', width: 512, height: 512 }],
+      samples: [{ id: 'sample-product', name: 'Sample product', width: 1024, height: 768 }],
     });
   });
 });
