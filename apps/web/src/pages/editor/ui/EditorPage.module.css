@@ -28,6 +28,11 @@
   background: var(--bg-surface);
 }
 
+/* Inside the edge: the canvas, the timeline and the window would hide an outer ring. */
+.inspector:focus-visible {
+  outline-offset: -2px;
+}
+
 /* Narrow screens keep the canvas viewable and runnable; the inspector steps aside. */
 @media (max-width: 900px) {
   .main {
