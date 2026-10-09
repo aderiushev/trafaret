@@ -46,7 +46,7 @@ async function presetDir(mainPrompt: string, file = 'custom.json', body?: unknow
 }
 
 describe('PresetRepository', () => {
-  it("loads presets in the brief's shape and pins their reference images", async () => {
+  it('loads every preset file and pins its reference images', async () => {
     const assets = new AssetStore({ maxBytes: 1 }); // tiny budget: pinned references must survive
     const presets = await PresetRepository.load(join(libraryDir, 'presets'), assets);
     const premium = presets.get('premium-3d');

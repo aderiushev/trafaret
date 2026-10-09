@@ -59,7 +59,7 @@ describe('contracts', () => {
     expect(isTerminalRunStatus('running')).toBe(false);
   });
 
-  it("accepts a preset in exactly the brief's shape", () => {
+  it('accepts a preset of id, name, mainPrompt, negativePrompt and references', () => {
     const preset = {
       id: 'premium-3d',
       name: 'Premium 3D',

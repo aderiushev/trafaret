@@ -11,7 +11,7 @@ import {
 } from './nodes.ts';
 
 describe('NODE_DEFINITIONS', () => {
-  it('defines exactly the five node types from the brief', () => {
+  it('defines exactly the five node types', () => {
     expect(NODE_TYPES).toEqual(['prompt', 'imageInput', 'generateImage', 'editImage', 'result']);
     expect(Object.keys(NODE_DEFINITIONS).sort()).toEqual([...NODE_TYPES].sort());
   });

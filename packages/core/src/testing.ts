@@ -48,7 +48,7 @@ export const withNode = (graph: Graph, node: GraphNode): Graph => ({
   nodes: graph.nodes.map((existing) => (existing.id === node.id ? node : existing)),
 });
 
-/** Prompt → Generate A / Generate B → Result A / Result B — the brief's mandatory branching scenario. */
+/** Prompt → Generate A / Generate B → Result A / Result B — the branching scenario (R4). */
 export const branchingGraph = (): Graph => ({
   nodes: [
     promptNode('prompt'),
