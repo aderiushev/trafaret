@@ -1,0 +1,125 @@
+.fields {
+  display: grid;
+  gap: 10px;
+}
+
+.counter {
+  justify-self: end;
+  font: 500 11px/1 var(--font-mono);
+  color: var(--text-muted);
+}
+
+.over {
+  color: var(--error);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.seed {
+  display: grid;
+  gap: 4px;
+}
+
+.seedLabel {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.seedControl {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+}
+
+.seedValue {
+  flex: 1;
+  overflow: hidden;
+  font: 500 12px/1 var(--font-mono);
+  text-overflow: ellipsis;
+}
+
+.output {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+
+.thumbnail {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+.result {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.resultImage {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-canvas);
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.resultFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.download {
+  color: var(--port-image);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.placeholder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 24px 8px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 13px;
+  justify-content: center;
+  text-align: center;
+}
+
+.error {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: rgb(255 90 95 / 10%);
+}
+
+.errorMessage {
+  margin: 0;
+  color: var(--error);
+  font-size: 12px;
+}

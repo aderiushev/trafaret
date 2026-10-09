@@ -1,0 +1,41 @@
+.canvas {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+}
+
+.textWire :global(.react-flow__edge-path) {
+  stroke: var(--port-text);
+}
+
+.imageWire :global(.react-flow__edge-path) {
+  stroke: var(--port-image);
+}
+
+.textWire:global(.selected) :global(.react-flow__edge-path),
+.imageWire:global(.selected) :global(.react-flow__edge-path) {
+  stroke: var(--accent);
+}
+
+.empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  pointer-events: none;
+}
+
+.emptyPanel {
+  display: grid;
+  gap: 16px;
+  width: min(720px, 100%);
+  pointer-events: auto;
+}
+
+.emptyTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+}
