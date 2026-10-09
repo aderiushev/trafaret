@@ -37,3 +37,10 @@ export type PresetsResponse = z.infer<typeof presetsResponseSchema>;
 export type SamplesResponse = z.infer<typeof samplesResponseSchema>;
 
 export const assetUrl = (assetId: string): string => `/api/assets/${assetId}`;
+
+/** What POST /api/assets accepts. The editor checks the same limits before it uploads. */
+export const UPLOAD_LIMITS = {
+  maxBytes: 10 * 1024 * 1024,
+  maxSide: 4096,
+  mimeTypes: ['image/png', 'image/jpeg', 'image/webp'],
+} as const;

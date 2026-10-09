@@ -18,10 +18,8 @@ import {
 } from 'fastify-type-provider-zod';
 import type { Logger } from 'pino';
 import { z } from 'zod';
-import type { Issue } from '@trafaret/core';
+import { UPLOAD_LIMITS, type Issue } from '@trafaret/core';
 import { AppError, errorBody } from './errors.ts';
-
-export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 export type HttpServerOptions = {
   logger: Logger;
@@ -60,7 +58,7 @@ export async function createHttpServer(options: HttpServerOptions): Promise<Fast
     errorResponseBuilder: (_request, context) =>
       new AppError(429, 'RATE_LIMITED', `Too many requests. Try again in ${context.after}.`),
   });
-  await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, parts: 5 } });
+  await app.register(multipart, { limits: { fileSize: UPLOAD_LIMITS.maxBytes, files: 1, parts: 5 } });
 
   app
     .withTypeProvider<ZodTypeProvider>()

@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { AI_NODE_TYPES, MAX_SEED, NODE_DEFINITIONS, NODE_TYPES, isAiNodeType, randomSeed } from './nodes.ts';
+import {
+  AI_NODE_TYPES,
+  MAX_SEED,
+  NODE_DEFINITIONS,
+  NODE_TYPES,
+  isAiNodeType,
+  isAspectRatio,
+  isInputHandle,
+  randomSeed,
+} from './nodes.ts';
 
 describe('NODE_DEFINITIONS', () => {
   it('defines exactly the five node types from the brief', () => {
@@ -37,5 +46,20 @@ describe('randomSeed', () => {
       expect(seed).toBeGreaterThanOrEqual(0);
       expect(seed).toBeLessThanOrEqual(MAX_SEED);
     }
+  });
+});
+
+describe('type guards', () => {
+  it('recognises input handles', () => {
+    expect(isInputHandle('prompt')).toBe(true);
+    expect(isInputHandle('image')).toBe(true);
+    expect(isInputHandle('out')).toBe(false);
+    expect(isInputHandle(null)).toBe(false);
+  });
+
+  it('recognises aspect ratios', () => {
+    expect(isAspectRatio('16:9')).toBe(true);
+    expect(isAspectRatio('2:1')).toBe(false);
+    expect(isAspectRatio(undefined)).toBe(false);
   });
 });

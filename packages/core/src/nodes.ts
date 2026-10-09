@@ -11,12 +11,16 @@ export const isAiNodeType = (type: NodeType): type is AiNodeType =>
 
 export const ASPECT_RATIOS = ['1:1', '4:3', '3:4', '16:9', '9:16'] as const;
 export type AspectRatio = (typeof ASPECT_RATIOS)[number];
+export const isAspectRatio = (value: unknown): value is AspectRatio =>
+  ASPECT_RATIOS.some((ratio) => ratio === value);
 
 export const MAX_SEED = 2 ** 31 - 1;
 export const randomSeed = (): number => Math.floor(Math.random() * (MAX_SEED + 1));
 
 export const INPUT_HANDLES = ['prompt', 'image'] as const;
 export type InputHandle = (typeof INPUT_HANDLES)[number];
+export const isInputHandle = (value: unknown): value is InputHandle =>
+  INPUT_HANDLES.some((handle) => handle === value);
 export type OutputHandle = 'out';
 
 export type InputPortSpec = { handle: InputHandle; type: PortType; required: boolean; label: string };

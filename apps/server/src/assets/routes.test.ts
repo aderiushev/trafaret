@@ -2,7 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import FormData from 'form-data';
 import { pino } from 'pino';
 import { describe, expect, it } from 'vitest';
-import { createHttpServer, MAX_UPLOAD_BYTES } from '../http/server.ts';
+import { UPLOAD_LIMITS } from '@trafaret/core';
+import { createHttpServer } from '../http/server.ts';
 import { makePng, makeRotatedJpeg } from '../test/images.ts';
 import { AssetStore } from './asset-store.ts';
 import { inspectImage } from './image.ts';
@@ -63,7 +64,7 @@ describe('asset routes', () => {
 
   it('rejects files over 10 MB', async () => {
     const { app } = await setup();
-    const response = await upload(app, Buffer.alloc(MAX_UPLOAD_BYTES + 1));
+    const response = await upload(app, Buffer.alloc(UPLOAD_LIMITS.maxBytes + 1));
     expect(response.statusCode).toBe(413);
     expect(response.json()).toMatchObject({ error: { code: 'FILE_TOO_LARGE' } });
   });

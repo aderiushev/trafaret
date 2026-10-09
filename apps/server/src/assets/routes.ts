@@ -1,11 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { assetParamsSchema, assetSchema, assetUrl, type Asset } from '@trafaret/core';
+import { assetParamsSchema, assetSchema, assetUrl, UPLOAD_LIMITS, type Asset } from '@trafaret/core';
 import { AppError } from '../http/errors.ts';
 import { UnsupportedImageError, type AssetStore, type StoredAsset } from './asset-store.ts';
 import { inspectImage } from './image.ts';
-
-export const MAX_UPLOAD_SIDE = 4096;
 
 export const toAssetResponse = (asset: StoredAsset): Asset => ({
   assetId: asset.id,
@@ -38,12 +36,9 @@ export function registerAssetRoutes(
       const bytes = await file.toBuffer();
       const info = await inspectImage(bytes);
       if (!info) throw unsupportedImage();
-      if (info.width > MAX_UPLOAD_SIDE || info.height > MAX_UPLOAD_SIDE) {
-        throw new AppError(
-          422,
-          'IMAGE_TOO_LARGE',
-          `Images must be at most ${MAX_UPLOAD_SIDE}×${MAX_UPLOAD_SIDE} px.`,
-        );
+      const { maxSide } = UPLOAD_LIMITS;
+      if (info.width > maxSide || info.height > maxSide) {
+        throw new AppError(422, 'IMAGE_TOO_LARGE', `Images must be at most ${maxSide}×${maxSide} px.`);
       }
       // Header-only inspection lets a corrupt rotated photo through; storing it upright is what rejects it.
       const asset = await options.assets.put(bytes).catch((error: unknown) => {

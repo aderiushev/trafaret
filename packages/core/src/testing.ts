@@ -1,5 +1,6 @@
 import type { Graph, GraphEdge, GraphNode } from './graph.ts';
 import type { EditImageData, GenerateImageData, InputHandle } from './nodes.ts';
+import { emptyRunSummary, type Job, type Run } from './run.ts';
 
 export const promptNode = (id: string, text = 'A white sneaker on a stone pedestal'): GraphNode => ({
   id,
@@ -62,4 +63,29 @@ export const branchingGraph = (): Graph => ({
     edge('gen-a', 'result-a', 'image'),
     edge('gen-b', 'result-b', 'image'),
   ],
+});
+
+/** A job in a run snapshot: a successful Generate Image job that ran from t=1000 to t=2000 unless told otherwise. */
+export const job = (nodeId: string, fields: Partial<Job> = {}): Job => ({
+  nodeId,
+  nodeType: 'generateImage',
+  status: 'success',
+  attempt: 1,
+  startedAt: 1_000,
+  finishedAt: 2_000,
+  cached: false,
+  ...fields,
+});
+
+/** A run snapshot holding `jobs`: completed, from t=1000 to t=2000, unless told otherwise. */
+export const runSnapshot = (jobs: readonly Job[], fields: Partial<Run> = {}): Run => ({
+  id: 'run_test',
+  status: 'completed',
+  version: 1,
+  createdAt: 0,
+  startedAt: 1_000,
+  finishedAt: 2_000,
+  jobs: Object.fromEntries(jobs.map((item) => [item.nodeId, item])),
+  summary: emptyRunSummary(),
+  ...fields,
 });
