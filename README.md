@@ -52,7 +52,7 @@ Open `http://127.0.0.1:8080`. Without Docker: `pnpm build && pnpm --filter @traf
 
 ```mermaid
 flowchart LR
-  editor["Editor<br/>React SPA"] -- "POST /api/runs<br/>poll GET /api/runs/:id" --> api
+  editor["Editor<br/>React SPA"] -- "POST /api/runs<br/>poll GET /api/runs/:runId" --> api
   subgraph server["Fastify — one process"]
     api["API<br/>zod schemas, OpenAPI"] --> engine["Engine"]
     engine --> cache[("Result cache")]
