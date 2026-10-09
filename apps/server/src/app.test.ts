@@ -75,5 +75,10 @@ describe('app', { timeout: RENDER_TEST_TIMEOUT_MS }, () => {
     expect((await startRun({ ...visitor, 'x-forwarded-for': '198.51.100.2' })).statusCode).toBe(400);
     expect((await startRun({ ...visitor, 'x-forwarded-for': '198.51.100.3' })).statusCode).toBe(429);
     expect((await startRun({ 'cf-connecting-ip': '203.0.113.8' })).statusCode).toBe(400);
+
+    // Without the edge header the key is the connecting address, never the client's own X-Forwarded-For claim.
+    expect((await startRun({ 'x-forwarded-for': '198.51.100.4' })).statusCode).toBe(400);
+    expect((await startRun({ 'x-forwarded-for': '198.51.100.5' })).statusCode).toBe(400);
+    expect((await startRun({ 'x-forwarded-for': '198.51.100.6' })).statusCode).toBe(429);
   });
 });

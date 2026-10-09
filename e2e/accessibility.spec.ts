@@ -25,6 +25,7 @@ test('the editor passes an accessibility scan when idle, after a run and with a 
   await cards(page, 'generateImage')
     .first()
     .click({ position: { x: 20, y: 12 } });
+  await expect(page.getByRole('complementary', { name: 'Inspector' })).toContainText('Request sent to AI');
   expect(await accessibilityProblems(page)).toEqual([]);
 
   // A failed node: error messages, Retry buttons and a failed timeline row.
@@ -33,5 +34,6 @@ test('the editor passes an accessibility scan when idle, after a run and with a 
   await generate.getByLabel('Model').selectOption('mock-fails-first');
   await runButton(page).click();
   await expect(generate.getByRole('alert')).toContainText('always fails its first attempt');
+  await expect(timeline(page).getByRole('listitem').filter({ hasText: 'Failed' })).toHaveCount(1);
   expect(await accessibilityProblems(page)).toEqual([]);
 });
