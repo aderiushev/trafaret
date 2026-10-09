@@ -1,6 +1,11 @@
 # Trafaret
 
+[![Live demo](https://img.shields.io/badge/live%20demo-trafaret.onrender.com-ff5f1f)](https://trafaret.onrender.com)
 [![CI](https://github.com/aderiushev/trafaret/actions/workflows/ci.yml/badge.svg)](https://github.com/aderiushev/trafaret/actions/workflows/ci.yml)
+
+### ▶ [Open the live demo — trafaret.onrender.com](https://trafaret.onrender.com)
+
+[![The editor: one prompt rendered by two Seedream 4.5 branches, a photo edited into a new scene, and a timeline that shows the two branches reused from the cache](docs/media/editor.webp)](https://trafaret.onrender.com)
 
 A node-based editor for reusable AI-image recipes. Put a prompt, a photo, _Generate Image_, _Edit Image_ and
 _Result_ blocks on a canvas, wire them up, pick a style preset and press **Run**. Independent branches render at
@@ -9,10 +14,8 @@ comes from a content-addressed cache, and a timeline shows it.
 
 _Trafaret_ (трафарет) is Russian for _stencil_: cut it once, use it again and again.
 
-**[Open the live demo →](https://trafaret.onrender.com)** It runs FLUX.2 klein and Seedream 4.5 within small daily
-caps, on a free instance: the first visit after a quiet spell takes about a minute to wake it up.
-
-![The editor: one prompt rendered by two Seedream 4.5 branches, a photo edited into a new scene, and a timeline that shows the two branches reused from the cache](docs/media/editor.webp)
+The demo runs FLUX.2 klein and Seedream 4.5 within small daily caps, on a free instance: the first visit after a
+quiet spell takes about a minute to wake it up.
 
 ## Run it locally — no keys needed
 
@@ -150,5 +153,4 @@ calls (left out on purpose: every retry costs money).
 
 ## About
 
-Built by Aleksei Deriushev with [Claude Code](https://claude.com/claude-code) as a pair programmer. The design
-spec and the implementation plans are in [`docs/`](docs). MIT License.
+Built by Aleksei Deriushev. The design spec and the implementation plans are in [`docs/`](docs). MIT License.
