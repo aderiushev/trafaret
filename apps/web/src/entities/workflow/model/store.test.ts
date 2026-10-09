@@ -71,10 +71,17 @@ describe('workflow store', () => {
     store().replaceGraph({ nodes: [promptNode(long('p')), generateNode(long('g'))], edges: [] });
     store().connect({ source: long('p'), sourceHandle: 'out', target: long('g'), targetHandle: 'prompt' });
     expect(graphSchema.safeParse(getWorkflowGraph()).success).toBe(true);
+    expect(getWorkflowGraph().edges).toMatchObject([
+      { source: long('p'), target: long('g'), targetHandle: 'prompt' },
+    ]);
   });
 });
 
 describe('saving', () => {
+  it('starts out asking for a starter workflow', () => {
+    expect(useWorkflowStore.getInitialState().needsStarter).toBe(true);
+  });
+
   it('saves only the graph, in the shape the API takes', () => {
     store().replaceGraph(branchingGraph());
     store().onNodesChange([{ type: 'select', id: 'gen-a', selected: true }]);
@@ -83,6 +90,7 @@ describe('saving', () => {
   });
 
   it('restores a saved graph', async () => {
+    useWorkflowStore.setState({ needsStarter: true }); // first: setState also saves, and must not overwrite the graph below
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ state: { graph: branchingGraph() }, version: 0 }));
     await useWorkflowStore.persist.rehydrate();
     expect(store().nodes).toHaveLength(5);
@@ -95,6 +103,13 @@ describe('saving', () => {
     expect(store().needsStarter).toBe(true);
     useWorkflowStore.setState({ needsStarter: false });
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ state: { graph: { nodes: 'broken' } }, version: 0 }));
+    await useWorkflowStore.persist.rehydrate();
+    expect(store().needsStarter).toBe(true);
+  });
+
+  it('asks for a starter workflow when the saved text is not JSON', async () => {
+    useWorkflowStore.setState(useWorkflowStore.getInitialState(), true); // a fresh page load: the initial state
+    localStorage.setItem(STORAGE_KEY, '{not json');
     await useWorkflowStore.persist.rehydrate();
     expect(store().needsStarter).toBe(true);
   });

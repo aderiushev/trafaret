@@ -19,7 +19,10 @@ export type WorkflowState = {
   edges: FlowEdge[];
   /** Issues from the last attempt to run. A node's issues clear once it is edited, rewired or removed. */
   issues: Issue[];
-  /** True when nothing usable was saved, so the editor places a starter workflow. */
+  /**
+   * True until a usable saved graph is loaded or a workflow is placed,
+   * so the editor places a starter workflow.
+   */
   needsStarter: boolean;
 };
 
@@ -59,7 +62,7 @@ export const useWorkflowStore = create<WorkflowState & WorkflowActions>()(
       nodes: [],
       edges: [],
       issues: [],
-      needsStarter: false,
+      needsStarter: true,
 
       onNodesChange: (changes) => {
         const removed = removedIds(changes);
@@ -115,7 +118,9 @@ export const useWorkflowStore = create<WorkflowState & WorkflowActions>()(
       partialize: (state) => ({ graph: toGraph(state.nodes, state.edges) }),
       merge: (persisted, current) => {
         const graph = savedGraph(persisted);
-        return graph ? { ...current, ...fromGraph(graph) } : { ...current, needsStarter: true };
+        return graph
+          ? { ...current, ...fromGraph(graph), needsStarter: false }
+          : { ...current, needsStarter: true };
       },
     },
   ),
