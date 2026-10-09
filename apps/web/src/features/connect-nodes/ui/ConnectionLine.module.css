@@ -1,0 +1,22 @@
+.path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.rejected .path {
+  stroke: var(--error);
+  stroke-dasharray: 6 4;
+}
+
+.reason {
+  display: inline-block;
+  margin: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--error);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.3;
+}
