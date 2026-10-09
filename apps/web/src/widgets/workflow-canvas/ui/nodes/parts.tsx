@@ -3,6 +3,7 @@ import { retryTarget } from '@/entities/run';
 import { RegenerateButton } from '@/features/regenerate-node';
 import { RetryButton } from '@/features/retry-node';
 import { useRunWorkflow } from '@/features/run-workflow';
+import { cx } from '@/shared/lib';
 import { Badge } from '@/shared/ui';
 import styles from './nodes.module.css';
 
@@ -49,7 +50,7 @@ export function JobError({ job, runId }: { job: Job | undefined; runId: string |
   if (job?.status !== 'error' || !job.error) return null;
   const target = retryTarget(job);
   return (
-    <div role="alert" className={styles.error}>
+    <div role="alert" className={cx(styles.error, 'nodrag')}>
       <p className={styles.errorMessage}>{job.error.message}</p>
       {target !== null && runId !== null && <RetryButton runId={runId} nodeId={target} />}
     </div>

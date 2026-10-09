@@ -2,12 +2,23 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { ImageModel, Preset } from '@trafaret/core';
-import { edge, editNode, generateNode, imageInputNode, promptNode, resultNode } from '@trafaret/core/testing';
+import type { ImageModel, Preset, Run } from '@trafaret/core';
+import {
+  branchingGraph,
+  edge,
+  editNode,
+  generateNode,
+  imageInputNode,
+  job,
+  promptNode,
+  resultNode,
+  runSnapshot,
+} from '@trafaret/core/testing';
 import { samplesQuery } from '@/entities/asset';
 import { catalogQuery } from '@/entities/catalog';
 import { presetsQuery } from '@/entities/preset';
-import { useWorkflowStore } from '@/entities/workflow';
+import { runQueryKey, useRunSession } from '@/entities/run';
+import { getWorkflowGraph, useWorkflowStore } from '@/entities/workflow';
 import { WorkflowCanvas } from './WorkflowCanvas';
 
 /** jsdom has no layout: React Flow's documented test shims, so nodes count as measured and render. */
@@ -67,11 +78,15 @@ const premium: Preset = {
   references: [],
 };
 
-function renderCanvas() {
+function renderCanvas(run?: Run) {
   const queryClient = new QueryClient();
   queryClient.setQueryData(catalogQuery.queryKey, [mock]);
   queryClient.setQueryData(presetsQuery.queryKey, [premium]);
   queryClient.setQueryData(samplesQuery.queryKey, []);
+  if (run) {
+    queryClient.setQueryData(runQueryKey(run.id), run);
+    useRunSession.setState({ activeRunId: run.id, submittedGraph: getWorkflowGraph() });
+  }
   return render(
     <QueryClientProvider client={queryClient}>
       <ReactFlowProvider>
@@ -84,7 +99,10 @@ function renderCanvas() {
 }
 
 beforeAll(mockReactFlow);
-beforeEach(() => useWorkflowStore.setState({ nodes: [], edges: [], issues: [], needsStarter: false }));
+beforeEach(() => {
+  useWorkflowStore.setState({ nodes: [], edges: [], issues: [], needsStarter: false });
+  useRunSession.setState({ activeRunId: null, submittedGraph: null });
+});
 
 describe('WorkflowCanvas', () => {
   it('renders a card for every node type, showing its settings', async () => {
@@ -117,5 +135,33 @@ describe('WorkflowCanvas', () => {
     renderCanvas();
     expect(screen.getByRole('heading', { name: 'Start from a template or add a node' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /One prompt, two styles/ })).toBeEnabled();
+  });
+
+  it('keeps Retry and Download clickable: both sit in no-drag areas of their cards', async () => {
+    useWorkflowStore.getState().replaceGraph(branchingGraph());
+    const image = {
+      kind: 'image',
+      assetId: 'a'.repeat(64),
+      url: '/api/assets/a',
+      width: 64,
+      height: 64,
+    } as const;
+    const busy = {
+      code: 'PROVIDER_ERROR',
+      message: 'The AI service is busy. Retry in a few seconds.',
+      retryable: true,
+    } as const;
+    renderCanvas(
+      runSnapshot(
+        [
+          job('gen-a', { status: 'error', error: busy }),
+          job('gen-b', { output: image }),
+          job('result-b', { nodeType: 'result', output: image }),
+        ],
+        { status: 'failed' },
+      ),
+    );
+    expect((await screen.findByRole('button', { name: 'Retry' })).closest('.nodrag')).not.toBeNull();
+    expect(screen.getByRole('link', { name: 'Download' }).closest('.nodrag')).not.toBeNull();
   });
 });

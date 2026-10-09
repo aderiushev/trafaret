@@ -4,6 +4,7 @@ import { NodeShell, PortHandle } from '@/entities/node';
 import { useNodeJob } from '@/entities/run';
 import { useUpstreamNodeId, type FlowNodeOf } from '@/entities/workflow';
 import { useHandleCompatibility } from '@/features/connect-nodes';
+import { cx } from '@/shared/lib';
 import { Spinner } from '@/shared/ui';
 import { useNodeView } from '../../model/use-node-view';
 import { JobBadges, JobError } from './parts';
@@ -52,7 +53,7 @@ export function ResultNode({ id, data, selected }: NodeProps<FlowNodeOf<'result'
             <span className={styles.badges}>
               <JobBadges job={sourceJob} />
             </span>
-            <a className={styles.download} href={output.url} download={`trafaret-${id}.webp`}>
+            <a className={cx(styles.download, 'nodrag')} href={output.url} download={`trafaret-${id}.webp`}>
               Download
             </a>
           </figcaption>
