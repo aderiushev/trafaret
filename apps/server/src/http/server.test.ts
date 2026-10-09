@@ -15,6 +15,14 @@ describe('createHttpServer', () => {
     expect(response.json()).toEqual({ ok: true });
   });
 
+  it('tells browsers not to second-guess any content type', async () => {
+    const app = await createHttpServer({ logger });
+    for (const url of ['/api/health', '/api/nope']) {
+      const response = await app.inject({ method: 'GET', url });
+      expect(response.headers['x-content-type-options']).toBe('nosniff');
+    }
+  });
+
   it('serves the OpenAPI document', async () => {
     const app = await createHttpServer({ logger });
     const response = await app.inject({ method: 'GET', url: '/api/docs/json' });

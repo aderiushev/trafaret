@@ -37,6 +37,11 @@ export async function createHttpServer(options: HttpServerOptions): Promise<Fast
     trustProxy: options.trustProxy ?? false,
     frameworkErrors: (error, _request, reply) => void sendUrlError(reply, error),
   });
+  // Browsers must take every response, uploaded images included, as the type it declares.
+  app.addHook('onRequest', (_request, reply, done) => {
+    reply.header('x-content-type-options', 'nosniff');
+    done();
+  });
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
   registerErrorHandling(app);

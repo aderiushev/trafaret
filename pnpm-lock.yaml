@@ -50,6 +50,9 @@ importers:
       '@fastify/rate-limit':
         specifier: ^11.2.0
         version: 11.2.0
+      '@fastify/static':
+        specifier: ^10.1.5
+        version: 10.1.5
       '@fastify/swagger':
         specifier: ^9.9.1
         version: 9.9.1

@@ -4,11 +4,16 @@ import { registerAssetRoutes } from './assets/routes.ts';
 import { registerCatalogRoutes } from './catalog/routes.ts';
 import type { Config } from './config.ts';
 import { createHttpServer } from './http/server.ts';
+import { registerWebApp } from './http/web-app.ts';
 import { registerLibraryRoutes } from './library/routes.ts';
 import { registerRunRoutes } from './runs/routes.ts';
 import type { Services } from './services.ts';
 
-export type AppOptions = { rateLimits?: { runsPer10Minutes: number; uploadsPer10Minutes: number } };
+export type AppOptions = {
+  rateLimits?: { runsPer10Minutes: number; uploadsPer10Minutes: number };
+  /** The built editor (apps/web/dist). When set, the server serves it next to the API. */
+  webRoot?: string;
+};
 
 /** Behind the demo host's edge, the visitor's address arrives in cf-connecting-ip. */
 const clientKey = (request: FastifyRequest): string => {
@@ -44,5 +49,6 @@ export async function buildApp(
     assets: services.assets,
     runsPer10Minutes: limits.runsPer10Minutes,
   });
+  if (options.webRoot) await registerWebApp(app, options.webRoot);
   return app;
 }
