@@ -1,0 +1,18 @@
+# The live demo on Render: one free Docker web service. Creating it from this blueprint (New → Blueprint) asks for
+# the provider keys once; they live in Render's dashboard, never in the repository.
+services:
+  - type: web
+    name: trafaret
+    runtime: docker
+    plan: free
+    region: frankfurt
+    healthCheckPath: /api/health
+    # A push to main is deployed once its CI checks have passed.
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: CLOUDFLARE_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_API_TOKEN
+        sync: false
+      - key: ARK_API_KEY
+        sync: false
