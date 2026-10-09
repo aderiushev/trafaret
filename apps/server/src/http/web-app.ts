@@ -13,6 +13,9 @@ export async function registerWebApp(app: FastifyInstance, root: string): Promis
   const bundles = join(root, 'assets') + sep;
   await app.register(fastifyStatic, {
     root,
+    // One route per file: the build is complete before the server starts. A catch-all route would also take the
+    // API paths the router rejects, turning an over-long id's 414 into a 404.
+    wildcard: false,
     setHeaders: (reply, path) => {
       reply.header('cache-control', path.startsWith(bundles) ? IMMUTABLE : 'no-cache');
     },

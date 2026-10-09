@@ -17,7 +17,7 @@ describe('createHttpServer', () => {
 
   it('tells browsers not to second-guess any content type', async () => {
     const app = await createHttpServer({ logger });
-    for (const url of ['/api/health', '/api/nope']) {
+    for (const url of ['/api/health', '/api/nope', '/api/%zz']) {
       const response = await app.inject({ method: 'GET', url });
       expect(response.headers['x-content-type-options']).toBe('nosniff');
     }

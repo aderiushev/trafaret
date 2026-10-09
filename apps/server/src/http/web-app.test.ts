@@ -50,6 +50,14 @@ describe('registerWebApp', () => {
     }
   });
 
+  it('leaves URLs the router rejects to the API', async () => {
+    const app = await setup();
+    app.get('/items/:id', () => ({ ok: true }));
+    const response = await app.inject({ method: 'GET', url: `/items/${'x'.repeat(101)}` });
+    expect(response.statusCode).toBe(414);
+    expect(response.json()).toMatchObject({ error: { code: 'URI_TOO_LONG' } });
+  });
+
   it('still routes the API', async () => {
     const app = await setup();
     expect((await app.inject({ method: 'GET', url: '/api/health' })).json()).toEqual({ ok: true });

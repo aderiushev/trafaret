@@ -121,8 +121,9 @@ function sendInternalError(request: FastifyRequest, reply: FastifyReply, cause: 
   return sendError(reply, 500, 'INTERNAL', 'Something went wrong on our side. Try again in a moment.');
 }
 
-/** The router rejects a malformed URL or an over-long route parameter before any route or error handler runs. */
+/** The router rejects a malformed URL or an over-long route parameter before any route, hook or error handler runs. */
 function sendUrlError(reply: FastifyReply, error: FastifyError): FastifyReply {
+  reply.header('x-content-type-options', 'nosniff'); // the onRequest hook never ran for this request
   const status = error.statusCode ?? 400;
   return status === 414
     ? sendError(reply, 414, 'URI_TOO_LONG', 'The request URL is too long.')
