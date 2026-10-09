@@ -13,7 +13,11 @@ export default defineConfig({
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
   expect: { timeout: 10_000 },
   use: { baseURL: `http://127.0.0.1:${WEB_PORT}`, trace: 'retain-on-failure' },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    // Runs first; if the server could reach a real, paid model, the scenarios never start.
+    { name: 'mock-mode', testMatch: 'mock-mode.setup.ts' },
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, dependencies: ['mock-mode'] },
+  ],
   webServer: [
     {
       command: 'pnpm --filter @trafaret/server start',
