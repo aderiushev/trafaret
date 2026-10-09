@@ -23,7 +23,8 @@ export function EditorPage() {
       )}
       <main className={styles.main}>
         <WorkflowCanvas />
-        <aside className={styles.inspector}>
+        {/* Focusable, so the keyboard can scroll it when its content runs long. */}
+        <aside className={styles.inspector} aria-label="Inspector" tabIndex={0}>
           <NodeInspector />
         </aside>
       </main>

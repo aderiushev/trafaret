@@ -4,6 +4,16 @@
   min-height: 0;
 }
 
+/* Read by screen readers only: the node cards' headings sit under it. */
+.heading {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .textWire :global(.react-flow__edge-path) {
   stroke: var(--port-text);
 }

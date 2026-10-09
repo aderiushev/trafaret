@@ -51,6 +51,7 @@ export function WorkflowCanvas() {
 
   return (
     <div className={styles.canvas}>
+      <h2 className={styles.heading}>Workflow</h2>
       <ReactFlow<FlowNode, FlowEdge>
         nodes={nodes}
         edges={shownEdges}
