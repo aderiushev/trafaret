@@ -13,7 +13,14 @@ export function ExportImportButtons() {
   const fileInput = useRef<HTMLInputElement>(null);
 
   const importFile = async (file: File): Promise<void> => {
-    const graph = parseWorkflowFile(await file.text());
+    let text: string;
+    try {
+      text = await file.text();
+    } catch {
+      toast.error("Couldn't read that file.", ['Choose the file again.']);
+      return;
+    }
+    const graph = parseWorkflowFile(text);
     if (!graph) {
       toast.error("This file isn't a Trafaret workflow.", ['Export a workflow to see the expected format.']);
       return;

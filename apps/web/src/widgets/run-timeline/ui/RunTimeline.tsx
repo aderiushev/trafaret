@@ -29,6 +29,8 @@ const RUN_STATUS: Readonly<
 
 const percent = (fraction: number): string => `${(fraction * 100).toFixed(2)}%`;
 
+const HOW_TO_RECOVER = 'Run the workflow again — finished nodes are reused.';
+
 /** When each AI call of the active run started and ended: parallel branches overlap, reused nodes take no time. */
 export function RunTimeline() {
   const { data: run, error } = useActiveRunQuery();
@@ -37,19 +39,16 @@ export function RunTimeline() {
   const presets = usePresets().data ?? [];
   const models = useCatalog().data ?? [];
   const [open, setOpen] = useState(true);
-  const now = useNow(run !== undefined && !isTerminalRunStatus(run.status), 200);
+  // Once polling has given up, the last snapshot stays as it is: its running bars stop growing.
+  const now = useNow(run !== undefined && !isTerminalRunStatus(run.status) && !error, 200);
 
-  if (error) {
-    return (
-      <section aria-label="Run timeline" className={styles.timeline}>
-        <p className={styles.empty}>Couldn't load the last run: {error.message}</p>
-      </section>
-    );
-  }
   if (!run || !submitted) {
+    const message = error
+      ? `Couldn't load the last run: ${error.message} ${HOW_TO_RECOVER}`
+      : 'Run the workflow to see when each AI call starts and ends.';
     return (
       <section aria-label="Run timeline" className={styles.timeline}>
-        <p className={styles.empty}>Run the workflow to see when each AI call starts and ends.</p>
+        <p className={styles.empty}>{message}</p>
       </section>
     );
   }
@@ -70,6 +69,11 @@ export function RunTimeline() {
         <span className={styles.summary}>{formatRunSummary(run, now)}</span>
         <Badge tone={RUN_STATUS[run.status].tone}>{RUN_STATUS[run.status].label}</Badge>
       </header>
+      {error && (
+        <p className={styles.lostContact}>
+          Lost contact with the server: {error.message} {HOW_TO_RECOVER}
+        </p>
+      )}
       {open && (
         <ol className={styles.rows}>
           {bars.map((bar) => {

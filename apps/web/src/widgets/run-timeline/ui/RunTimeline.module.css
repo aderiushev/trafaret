@@ -21,6 +21,7 @@
 }
 
 .toggle {
+  padding: 6px 0;
   border: 0;
   background: none;
   font: 600 12px/1 var(--font-ui);
@@ -34,12 +35,21 @@
   flex: 1;
 }
 
+.lostContact {
+  margin: 0;
+  padding: 0 16px 8px;
+  color: var(--error);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+/* The top padding keeps the first row's focus ring inside the scroll area, which would clip it. */
 .rows {
   display: grid;
   gap: 6px;
   max-height: 28vh;
   margin: 0;
-  padding: 0 16px 12px;
+  padding: 4px 16px 12px;
   overflow-y: auto;
   list-style: none;
 }
