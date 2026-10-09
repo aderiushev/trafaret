@@ -1,0 +1,44 @@
+.handle {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--bg-surface);
+  background: var(--port);
+  transition:
+    box-shadow 120ms ease,
+    opacity 120ms ease;
+}
+
+.text {
+  --port: var(--port-text);
+}
+
+.image {
+  --port: var(--port-image);
+}
+
+.compatible {
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--port) 35%, transparent);
+}
+
+.dimmed {
+  opacity: 0.25;
+}
+
+.label {
+  position: absolute;
+  bottom: 12px;
+  font: 600 10px/1 var(--font-mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--port);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.inputLabel {
+  right: 2px;
+}
+
+.outputLabel {
+  left: 2px;
+}
