@@ -24,6 +24,8 @@ export default defineConfig({
         PORT: String(API_PORT),
         LOG_LEVEL: 'warn',
         MOCK_LATENCY_MS: '800-1200',
+        // The branching scenario needs both Generate nodes running at once.
+        MAX_CONCURRENT_JOBS: '4',
         // Mock mode whatever the shell exports: a test never calls a real, paid model.
         CLOUDFLARE_ACCOUNT_ID: '',
         CLOUDFLARE_API_TOKEN: '',
