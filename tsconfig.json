@@ -1,5 +1,5 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": { "types": ["node"], "allowJs": true },
-  "include": ["*.ts", "*.js"]
+  "include": ["*.ts", "*.js", "e2e"]
 }
