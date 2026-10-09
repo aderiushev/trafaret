@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Graph } from '@trafaret/core';
 import { branchingGraph, edge, editNode, imageInputNode, promptNode } from '@trafaret/core/testing';
-import { checkWire, type WireEnd } from './check-wire';
+import { checkWire, isSameHandle, type WireEnd } from './check-wire';
 
 const output = (nodeId: string): WireEnd => ({ nodeId, handleId: 'out', type: 'source' });
 const input = (nodeId: string, handleId: string): WireEnd => ({ nodeId, handleId, type: 'target' });
@@ -49,5 +49,13 @@ describe('checkWire', () => {
       ok: false,
       reason: 'Connect an output to an input.',
     });
+  });
+});
+
+describe('isSameHandle', () => {
+  it('recognises two reports of the same handle', () => {
+    expect(isSameHandle(output('p'), output('p'))).toBe(true);
+    expect(isSameHandle(output('p'), output('q'))).toBe(false);
+    expect(isSameHandle(input('g', 'prompt'), input('g', 'image'))).toBe(false);
   });
 });

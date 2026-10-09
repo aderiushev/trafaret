@@ -16,3 +16,7 @@ export function checkWire(graph: Graph, from: WireEnd, to: WireEnd): ConnectResu
     targetHandle: target.handleId ?? null,
   });
 }
+
+/** True for two reports of one handle: React Flow names the start handle as the end while the pointer is still on it. */
+export const isSameHandle = (a: WireEnd, b: WireEnd): boolean =>
+  a.nodeId === b.nodeId && (a.handleId ?? null) === (b.handleId ?? null) && a.type === b.type;

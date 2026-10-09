@@ -1,7 +1,7 @@
 import { getBezierPath, type ConnectionLineComponentProps, type Handle } from '@xyflow/react';
 import { getWorkflowGraph, type FlowNode } from '@/entities/workflow';
 import { cx } from '@/shared/lib';
-import { checkWire, type WireEnd } from '../lib/check-wire';
+import { checkWire, isSameHandle, type WireEnd } from '../lib/check-wire';
 import styles from './ConnectionLine.module.css';
 
 const wireEnd = (handle: Handle): WireEnd => ({
@@ -29,7 +29,10 @@ export function ConnectionLine({
     targetY: toY,
     targetPosition: toPosition,
   });
-  const verdict = toHandle ? checkWire(getWorkflowGraph(), wireEnd(fromHandle), wireEnd(toHandle)) : null;
+  const from = wireEnd(fromHandle);
+  const to = toHandle ? wireEnd(toHandle) : null;
+  // While the pointer is still on the start handle, React Flow reports it as the end too: nothing to judge yet.
+  const verdict = to && !isSameHandle(from, to) ? checkWire(getWorkflowGraph(), from, to) : null;
   const reason = verdict && !verdict.ok ? verdict.reason : null;
   return (
     <g className={cx(styles.wire, reason !== null && styles.rejected)}>
