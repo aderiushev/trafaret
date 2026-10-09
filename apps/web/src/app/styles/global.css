@@ -65,3 +65,10 @@ img {
   --xy-minimap-mask-background-color: rgb(18 18 20 / 70%);
   --xy-attribution-background-color: transparent;
 }
+
+/* React Flow hides the focus ring on nodes; keyboard users need it. */
+.react-flow__node.selectable:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 6px;
+  border-radius: var(--radius-md);
+}

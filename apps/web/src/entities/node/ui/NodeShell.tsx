@@ -41,6 +41,7 @@ export function NodeShell({
     <article
       aria-label={title}
       data-status={status}
+      data-selected={selected}
       className={cx(styles.card, styles[status], selected && styles.selected)}
       style={{ width: NODE_CARD_WIDTH }}
     >

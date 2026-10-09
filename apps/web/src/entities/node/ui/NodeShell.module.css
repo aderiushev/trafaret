@@ -9,8 +9,10 @@
     box-shadow 120ms ease;
 }
 
+/* Selection has its own channel, so it shows on top of any status outline. */
 .selected {
-  border-color: var(--text-muted);
+  outline: 2px solid var(--text-muted);
+  outline-offset: 3px;
 }
 
 .queued {
