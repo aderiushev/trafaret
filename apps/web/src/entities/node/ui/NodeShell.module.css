@@ -25,6 +25,13 @@
   animation: pulse 1.4s ease-in-out infinite;
 }
 
+/* Without the pulse, the ring stays still. */
+@media (prefers-reduced-motion: reduce) {
+  .running {
+    box-shadow: 0 0 0 2px rgb(255 95 31 / 35%);
+  }
+}
+
 .error {
   border-color: var(--error);
 }

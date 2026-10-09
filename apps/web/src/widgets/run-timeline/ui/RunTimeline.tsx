@@ -48,7 +48,9 @@ export function RunTimeline() {
       : 'Run the workflow to see when each AI call starts and ends.';
     return (
       <section aria-label="Run timeline" className={styles.timeline}>
-        <p className={styles.empty}>{message}</p>
+        <p className={styles.empty} role={error ? 'alert' : undefined}>
+          {message}
+        </p>
       </section>
     );
   }
@@ -70,7 +72,7 @@ export function RunTimeline() {
         <Badge tone={RUN_STATUS[run.status].tone}>{RUN_STATUS[run.status].label}</Badge>
       </header>
       {error && (
-        <p className={styles.lostContact}>
+        <p className={styles.lostContact} role="alert">
           Lost contact with the server: {error.message} {HOW_TO_RECOVER}
         </p>
       )}
@@ -117,7 +119,7 @@ function TimelineRow({ label, bar, job, runId, now }: TimelineRowProps) {
       <span className={styles.value}>
         {bar.cached
           ? '⚡ reused'
-          : duration === null
+          : duration === null || bar.status === 'error'
             ? JOB_STATUS_LABEL[bar.status]
             : formatDuration(duration)}
       </span>

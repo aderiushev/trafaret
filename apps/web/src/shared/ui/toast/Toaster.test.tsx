@@ -34,6 +34,16 @@ describe('Toaster', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
+  it('keeps an error until it is dismissed', () => {
+    vi.useFakeTimers();
+    render(<Toaster />);
+    act(() => toast.error("Couldn't read that file.", ['Choose the file again.']));
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't read that file.");
+  });
+
   it('keeps at most three on screen', () => {
     render(<Toaster />);
     act(() => ['one', 'two', 'three', 'four'].forEach((title) => toast.info(title)));
