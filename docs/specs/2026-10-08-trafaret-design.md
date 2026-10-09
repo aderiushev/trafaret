@@ -571,7 +571,7 @@ The engine and `core` are written test-first.
 - **README** (English): a GIF of "change one preset → only one branch re-renders"; CI badge; live demo and
   `/api/docs` links; one-minute local start (`pnpm i && pnpm dev`, no keys needed); enabling the real models;
   architecture diagram; requirements checklist R1–R16 linked to code; decisions and trade-offs; "Not done / next
-  steps"; a note that it was built with Claude Code as a pair programmer; MIT license.
+  steps"; MIT license.
 - **Portfolio:** `aderiushev.github.io/trafaret/` (self-contained `index.html`, `styles.css`, `assets/`) in
   Trafaret's visual identity, plus card #15 "TF" in the projects grid — built once the demo is live and real
   screenshots exist.

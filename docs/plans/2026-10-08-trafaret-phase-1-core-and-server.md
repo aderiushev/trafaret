@@ -1,7 +1,5 @@
 # Trafaret — Phase 1: Core + Server Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** A tested, runnable API server that validates and executes AI-image workflow graphs — parallel branches, explicit retries, incremental (cached) re-runs, Cloudflare / BytePlus / Mock providers — usable end to end over HTTP without any UI.
 
 **Architecture:** pnpm monorepo. `packages/core` is the platform-agnostic workflow language (node types, typed ports, zod graph schema, `canConnect`, `validateGraph`, API contracts) that the server and, in Phase 2, the web app share. `apps/server` is Fastify 5 running TypeScript natively on Node 24 (no build step): library (presets, samples), assets, model catalog, providers, engine (request builder, cache keys, dependency-driven execution, retry), runs API, composition root.
@@ -6397,4 +6395,4 @@ git commit -m "feat(server): wire the composition root and document the API quic
 ## After Phase 1
 
 The API satisfies the brief's mandatory, UI-independent requirements (R6–R15). Next: write the Phase 2 plan (web
-editor) against the contracts in `packages/core`, using superpowers:writing-plans.
+editor) against the contracts in `packages/core`.

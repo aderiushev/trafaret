@@ -1,7 +1,5 @@
 # Trafaret — Phase 2: Web Editor Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** The editor on top of the Phase 1 API: a React Flow canvas with typed wiring and five node cards, runs with live statuses, Retry and 🎲, a run timeline and an inspector, templates, export/import — covered by unit tests and three Playwright scenarios.
 
 **Architecture:** `apps/web` is a Vite 8 single-page app (React 19 with the React Compiler) laid out in Feature-Sliced Design layers — `app → pages → widgets → features → entities → shared` — and linted by Steiger. A zustand + immer store, saved to `localStorage`, fully controls React Flow; TanStack Query holds server state, and exactly one component polls the active run. Node definitions, `canConnect`, `validateGraph` and the API schemas all come from `@trafaret/core`, so the canvas and the server can never disagree about a workflow. In development Vite proxies `/api` to the Fastify server.

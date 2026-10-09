@@ -5,7 +5,6 @@
 **/dist
 .git
 .private
-.superpowers
 coverage
 playwright-report
 test-results

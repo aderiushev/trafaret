@@ -1,7 +1,5 @@
 # Trafaret — Phase 3: Production Build, CI and Polish Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Make Trafaret ready to deploy and to show: the server serves the built editor, rate limits identify visitors correctly behind the demo host's edge, one Docker image runs everything, CI checks every push (with an accessibility scan and a guard against paid model calls), and the README explains the project.
 
 **Architecture:** No new subsystems. Fastify gains `@fastify/static` for `apps/web/dist` (one origin, no CORS) and a `nosniff` header on every response. In production the rate-limit key becomes the address in `cf-connecting-ip` — set by Render's Cloudflare edge — grouped per IPv6 /64, and `trustProxy` goes away. A multi-stage Dockerfile installs the server's production dependencies in pnpm's workspace layout (Node refuses to strip types inside `node_modules`) and copies in the built editor. GitHub Actions runs the existing gates plus e2e and a Docker smoke test, and Render deploys `main` only after those checks pass.
@@ -42,7 +40,7 @@ Finally the plan itself was generated from those files and replayed on a fresh c
 - Web code keeps Phase 2's rules: Feature-Sliced Design imports flow downward only, the React Compiler is on (no hand-written `useMemo` / `useCallback` / `memo`), CSS Modules and the design tokens.
 - Accessibility: visible focus, labelled controls, `prefers-reduced-motion` respected; from Task 5 on, the e2e suite fails on any axe finding at WCAG 2.2 A/AA or best practice.
 - Copy: English, terse, and it says how to recover.
-- Conventional commits, at least one per task, straight on `main`. Do not push: the controller asks the owner before anything leaves the machine.
+- Conventional commits, at least one per task, straight on `main`. Do not push: pushing is the owner's call.
 - The gate at the end of every task: `pnpm lint && pnpm typecheck && pnpm test`; tasks that touch the e2e suite also run `pnpm e2e`.
 
 **Spec deltas introduced by this plan** (Task 7 writes them into the spec):
@@ -634,7 +632,6 @@ One image for the demo (spec §11): Fastify serves the built editor and `/api`. 
 **/dist
 .git
 .private
-.superpowers
 coverage
 playwright-report
 test-results
@@ -1331,7 +1328,7 @@ git add .github/workflows/ci.yml render.yaml
 git commit -m "ci: check every push; deploy main on Render once the checks pass"
 ```
 
-The workflow first runs when the controller pushes, with the owner's consent. Pushing a file under `.github/workflows/` needs a GitHub credential with the `workflow` scope.
+The workflow first runs on the next push to GitHub. Pushing a file under `.github/workflows/` needs a GitHub credential with the `workflow` scope.
 
 ---
 
@@ -1494,8 +1491,7 @@ calls (left out on purpose: every retry costs money).
 
 ## About
 
-Built by Aleksei Deriushev with [Claude Code](https://claude.com/claude-code) as a pair programmer. The design
-spec and the implementation plans are in [`docs/`](docs). MIT License.
+Built by Aleksei Deriushev. The design spec and the implementation plans are in [`docs/`](docs). MIT License.
 ````
 
 Run: `pnpm exec prettier --check README.md`

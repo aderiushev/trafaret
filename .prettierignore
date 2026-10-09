@@ -1,6 +1,5 @@
 pnpm-lock.yaml
 docs/
 .private/
-.superpowers/
 **/dist/
 **/coverage/
