@@ -7,6 +7,7 @@ import {
   type NodeChange,
 } from '@xyflow/react';
 import { graphSchema, type Graph, type Issue, type NodeType } from '@trafaret/core';
+import { nanoid } from 'nanoid';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
@@ -82,7 +83,8 @@ export const useWorkflowStore = create<WorkflowState & WorkflowActions>()(
       },
       connect: (connection) =>
         set({
-          edges: addEdge(connection, get().edges),
+          // An id of our own: React Flow's default joins both node ids and can pass the API's 64-character limit.
+          edges: addEdge({ ...connection, id: nanoid() }, get().edges),
           issues: keepIssues(get().issues, (issue) => issue.nodeId === connection.target),
         }),
       addNode: (node) =>

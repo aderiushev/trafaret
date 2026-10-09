@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { Issue } from '@trafaret/core';
-import { branchingGraph, edge } from '@trafaret/core/testing';
+import { graphSchema, type Issue } from '@trafaret/core';
+import { branchingGraph, edge, generateNode, promptNode } from '@trafaret/core/testing';
 import { createNode } from '../lib/create-node';
 import { getWorkflowGraph } from './hooks';
 import { STORAGE_KEY, useWorkflowStore } from './store';
@@ -64,6 +64,13 @@ describe('workflow store', () => {
     store().onNodesChange([{ type: 'select', id: 'gen-a', selected: true }]);
     store().clearSelection();
     expect(store().nodes.some((node) => node.selected)).toBe(false);
+  });
+
+  it('gives a new connection an id the API accepts, however long the node ids are', () => {
+    const long = (name: string): string => `${name}-${'x'.repeat(40)}`;
+    store().replaceGraph({ nodes: [promptNode(long('p')), generateNode(long('g'))], edges: [] });
+    store().connect({ source: long('p'), sourceHandle: 'out', target: long('g'), targetHandle: 'prompt' });
+    expect(graphSchema.safeParse(getWorkflowGraph()).success).toBe(true);
   });
 });
 
