@@ -53,4 +53,13 @@ describe('Toaster', () => {
       'four×',
     ]);
   });
+
+  it('shows a repeated message once, with its latest details', () => {
+    render(<Toaster />);
+    act(() => toast.error('Fix 2 issues to run.', ['first']));
+    act(() => toast.error('Fix 2 issues to run.', ['second']));
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getByRole('alert')).toHaveTextContent('second');
+    expect(screen.getByRole('alert')).not.toHaveTextContent('first');
+  });
 });

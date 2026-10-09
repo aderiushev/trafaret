@@ -7,6 +7,8 @@ type ToastState = {
   toasts: Toast[];
   push: (toast: Omit<Toast, 'id'>) => void;
   dismiss: (id: number) => void;
+  /** Removes every error toast; info toasts go away by themselves. */
+  dismissErrors: () => void;
 };
 
 /** At most three toasts stay on screen; a fourth pushes the oldest out. */
@@ -16,8 +18,13 @@ let nextId = 1;
 export const useToastStore = create<ToastState>()((set) => ({
   toasts: [],
   push: (toast) =>
-    set((state) => ({ toasts: [...state.toasts.slice(1 - MAX_TOASTS), { ...toast, id: nextId++ }] })),
+    set((state) => {
+      // A repeated message (same tone and title) replaces the earlier one, in the newest position.
+      const others = state.toasts.filter((shown) => shown.tone !== toast.tone || shown.title !== toast.title);
+      return { toasts: [...others.slice(1 - MAX_TOASTS), { ...toast, id: nextId++ }] };
+    }),
   dismiss: (id) => set((state) => ({ toasts: state.toasts.filter((toast) => toast.id !== id) })),
+  dismissErrors: () => set((state) => ({ toasts: state.toasts.filter((toast) => toast.tone !== 'error') })),
 }));
 
 /** Shows a short message; works from anywhere, components or not. */
@@ -26,4 +33,6 @@ export const toast = {
     useToastStore.getState().push({ tone: 'info', title, details }),
   error: (title: string, details: readonly string[] = []): void =>
     useToastStore.getState().push({ tone: 'error', title, details }),
+  /** Removes every error toast; they would otherwise stay until dismissed. */
+  clearErrors: (): void => useToastStore.getState().dismissErrors(),
 };

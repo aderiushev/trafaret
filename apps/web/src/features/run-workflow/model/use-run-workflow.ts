@@ -25,6 +25,7 @@ export function useRunWorkflow(): { run: () => void; busy: boolean } {
     ...startRunMutation,
     onSuccess: (runId, graph) => {
       setIssues([]);
+      toast.clearErrors(); // once a run has started, earlier error messages no longer apply
       startSession(runId, graph);
     },
     onError: (error) => {

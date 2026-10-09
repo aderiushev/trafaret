@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Graph } from '@trafaret/core';
@@ -7,6 +7,7 @@ import { branchingGraph, generateNode } from '@trafaret/core/testing';
 import { useRunSession } from '@/entities/run';
 import { getWorkflowGraph, useWorkflowStore } from '@/entities/workflow';
 import { ApiError } from '@/shared/api';
+import { Toaster, toast } from '@/shared/ui';
 import { useRunWorkflow } from './use-run-workflow';
 
 // Only the POST is replaced: TanStack Query, the run session and the workflow store are the real ones.
@@ -37,6 +38,7 @@ async function runThenUnmount(response: Promise<string>): Promise<void> {
 
 beforeEach(() => {
   createRun.mockReset();
+  toast.clearErrors(); // error toasts left by earlier tests
   useWorkflowStore.setState({ nodes: [], edges: [], issues: [], needsStarter: false });
   useRunSession.setState({ activeRunId: null, submittedGraph: null });
 });
@@ -72,5 +74,18 @@ describe('useRunWorkflow', () => {
     response.reject(new ApiError(400, 'INVALID_GRAPH', 'Choose another preset.', [issue]));
     await waitFor(() => expect(useWorkflowStore.getState().issues).toEqual([issue]));
     expect(useRunSession.getState().activeRunId).toBeNull();
+  });
+
+  it('clears earlier error toasts once a run starts', async () => {
+    render(<Toaster />);
+    act(() => toast.error('Fix 2 issues to run.', ['Add a Generate Image node.']));
+    expect(screen.getByRole('alert')).toHaveTextContent('Fix 2 issues to run.');
+
+    useWorkflowStore.getState().replaceGraph(branchingGraph());
+    createRun.mockResolvedValue('run_1');
+    const { result } = renderRunWorkflow();
+    act(() => result.current.run());
+    await waitFor(() => expect(useRunSession.getState().activeRunId).toBe('run_1'));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

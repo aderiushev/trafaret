@@ -520,8 +520,8 @@ one assigns fresh node IDs and seeds.
   for numbers and the timeline.
 - UI copy in English: terse, imperative; error messages say how to recover.
 - Visible focus states, labelled icon buttons, `prefers-reduced-motion` respected (a running card keeps a still
-  ring). Error toasts stay until dismissed; the timeline announces lost contact. Desktop-first; on narrow screens the
-  canvas stays viewable and runnable.
+  ring). Error toasts stay until dismissed or until a run starts, and a repeated message replaces the earlier one;
+  the timeline announces lost contact. Desktop-first; on narrow screens the canvas stays viewable and runnable.
 - Hints use the native `title` attribute; there is no tooltip component.
 
 ## 9. Testing
