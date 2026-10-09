@@ -1,0 +1,26 @@
+.fallback {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  height: 100%;
+  padding: 24px;
+  text-align: center;
+}
+
+.title {
+  margin: 0;
+  font: 400 32px/1 var(--font-logo);
+  color: var(--accent);
+}
+
+.reload {
+  height: 34px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+  cursor: pointer;
+}

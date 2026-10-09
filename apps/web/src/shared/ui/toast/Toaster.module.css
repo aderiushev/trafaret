@@ -1,0 +1,53 @@
+.region {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 10;
+  display: grid;
+  gap: 8px;
+  width: min(380px, calc(100vw - 32px));
+}
+
+.toast {
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 40%);
+}
+
+.info {
+  border-left-color: var(--port-image);
+}
+
+.error {
+  border-left-color: var(--error);
+}
+
+.text {
+  flex: 1;
+}
+
+.title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.details {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+}
+
+.close {
+  align-self: flex-start;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}

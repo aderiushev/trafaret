@@ -1,0 +1,35 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font: 600 11px/1 var(--font-ui);
+  white-space: nowrap;
+}
+
+.neutral {
+  background: var(--bg-raised);
+  color: var(--text-muted);
+}
+
+.accent {
+  background: rgb(255 95 31 / 16%);
+  color: var(--accent);
+}
+
+.success {
+  background: rgb(58 214 154 / 14%);
+  color: var(--success);
+}
+
+.error {
+  background: rgb(255 90 95 / 14%);
+  color: var(--error);
+}
+
+.warning {
+  background: rgb(245 200 76 / 14%);
+  color: var(--warning);
+}

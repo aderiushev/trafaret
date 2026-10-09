@@ -1,0 +1,25 @@
+.textarea {
+  width: 100%;
+  min-height: 64px;
+  max-height: 220px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-canvas);
+  font-size: 13px;
+  line-height: 1.45;
+  resize: vertical;
+  field-sizing: content;
+}
+
+.textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.textarea:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.textarea:disabled {
+  opacity: 0.55;
+}
