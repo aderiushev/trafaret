@@ -1,6 +1,9 @@
 // @ts-check
 import eslint from '@eslint/js';
 import { defineConfig, globalIgnores } from 'eslint/config';
+import reactHooks from 'eslint-plugin-react-hooks';
+import reactRefresh from 'eslint-plugin-react-refresh';
+import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig(
@@ -18,7 +21,12 @@ export default defineConfig(
     },
   },
   {
-    files: ['**/*.test.ts', '**/src/test/**/*.ts'],
+    files: ['apps/web/**/*.{ts,tsx}'],
+    extends: [reactHooks.configs.flat['recommended-latest'], reactRefresh.configs.vite],
+    languageOptions: { globals: globals.browser },
+  },
+  {
+    files: ['**/*.test.ts', '**/*.test.tsx', '**/src/test/**/*.ts'],
     rules: {
       '@typescript-eslint/no-unsafe-member-access': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',

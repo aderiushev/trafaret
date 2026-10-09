@@ -1,0 +1,22 @@
+:root {
+  --bg-canvas: #121214;
+  --bg-surface: #1b1c1f;
+  --bg-raised: #24252a;
+  --border: #2e3035;
+  --border-strong: #464951;
+  --text: #ececef;
+  --text-muted: #9a9ca5;
+  --accent: #ff5f1f;
+  --accent-hover: #ff7a45;
+  --on-accent: #121214;
+  --port-text: #f5c84c;
+  --port-image: #4cb8ff;
+  --success: #3ad69a;
+  --error: #ff5a5f;
+  --warning: #f5c84c;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --font-ui: 'Inter Variable', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+  --font-logo: 'Saira Stencil One', var(--font-ui);
+}
