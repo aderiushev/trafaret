@@ -1,0 +1,39 @@
+.templates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.template {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  text-align: left;
+  cursor: pointer;
+}
+
+.template:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.template:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.name {
+  font-weight: 600;
+}
+
+.description {
+  color: var(--text-muted);
+  font-size: 12px;
+}

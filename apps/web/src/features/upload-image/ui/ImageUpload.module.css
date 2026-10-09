@@ -1,0 +1,25 @@
+.upload {
+  display: grid;
+  gap: 8px;
+}
+
+.preview {
+  width: 100%;
+  max-height: 180px;
+  object-fit: contain;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(18 18 20 / 70%);
+  color: var(--accent);
+}
+
+.error {
+  margin: 0;
+  color: var(--error);
+  font-size: 12px;
+}
