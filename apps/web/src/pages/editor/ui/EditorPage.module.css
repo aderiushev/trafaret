@@ -1,11 +1,22 @@
+/* A column rather than a grid of fixed rows: the server notice comes and goes between the toolbar and the canvas. */
 .page {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   height: 100%;
+}
+
+.notice {
+  margin: 0;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: rgb(255 90 95 / 10%);
+  color: var(--error);
+  font-size: 13px;
 }
 
 .main {
   display: grid;
+  flex: 1;
   grid-template-columns: minmax(0, 1fr) 340px;
   min-height: 0;
 }

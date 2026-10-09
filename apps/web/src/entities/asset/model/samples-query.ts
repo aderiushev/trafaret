@@ -6,6 +6,8 @@ export const samplesQuery = queryOptions({
   queryKey: ['samples'],
   queryFn: ({ signal }) => fetchSamples(signal),
   staleTime: Infinity,
+  // The API may still be starting: three tries more (about 7 s) before giving up.
+  retry: 3,
 });
 
 export const useSamples = () => useQuery(samplesQuery);
